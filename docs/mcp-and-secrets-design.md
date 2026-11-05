@@ -97,7 +97,12 @@ It is not MCP-only. Any current or future kit content that needs a secret uses t
 same `${KIT_SECRET:NAME}` + `secrets.env` mechanism. This is the one place secrets
 enter the kit, which is what makes "publish the repo" safe to reason about.
 
-## Going-public checklist (before the first public push)
+## Going-public checklist (run before EVERY push)
+
+Automated as `scripts/check-public.sh` (read-only; exits non-zero on any FAIL).
+Run it before every push, not only the first — a later commit can introduce a
+secret (an imported upstream rule, a new MCP server). The manual list below is
+what the script encodes.
 
 - `config/secrets.env` is gitignored and was never committed (check `git log`).
 - No secret in any committed file: grep the history, not just the worktree, for

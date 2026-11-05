@@ -115,6 +115,12 @@ rule 沒有「掃 repo 找新 rule」這一步，因為任何 `.md` 都可能是
 
 重裝只覆蓋 kit 產生的檔案（第一行有產生標記）。手寫的同名 rule 會被略過不覆寫。
 
+## 公開與 push
+
+這個 repo 設計成可公開。密鑰只放 gitignored 的 `config/secrets.env`，repo 內用 `${KIT_SECRET:NAME}` 引用。
+
+**每次 push 前都要跑 `scripts/check-public.sh`**，不只第一次。因為之後引入的上游 rule 或新增的 MCP server 可能夾帶密鑰。腳本是唯讀的，檢查八項（secrets.env 未進歷史、無 token 樣式字串、無嵌入密鑰、作者 email 等），有 FAIL 就會 exit 非零並顯示「DO NOT PUSH」。全 PASS 才推。
+
 ## 限制
 
 - `check-updates.sh`、`import-skill.sh`、`import-rule.sh`、`diff-upstream.sh` 需要 `gh` 已登入。
