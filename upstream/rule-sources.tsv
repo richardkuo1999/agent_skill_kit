@@ -1,0 +1,6 @@
+# name	repo	ref	license_path
+# Rule sources. Unlike skill sources there is no single dir: each rule names its
+# own upstream file path when imported (see rule-selected.tsv), because rules
+# live in varied places (a repo-root AGENTS.md, a skill folder's SKILL.md, etc).
+mattpocock	mattpocock/skills	main	LICENSE
+pstack	cursor/plugins	main	pstack/LICENSE

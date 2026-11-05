@@ -1,6 +1,6 @@
 ---
 name: upstream-sync
-description: Fetch official updates for the skills this kit imported from upstream repos (mattpocock/skills, cursor/plugins pstack), then discuss with the user which changes to adopt. Use when the user says "check upstream", "sync skills", "any updates to the skills", or asks about new upstream skills.
+description: Fetch official updates for the skills AND rules this kit imported from upstream repos (mattpocock/skills, cursor/plugins pstack), then discuss with the user which changes to adopt. Use when the user says "check upstream", "sync skills", "sync rules", "any updates", or asks about new upstream skills or rules.
 ---
 
 # Upstream sync
@@ -12,7 +12,9 @@ Never import, overwrite or commit before the user approves each item.
 
 ## Steps
 
-1. Run `scripts/check-updates.sh` from the kit root. It is read-only.
+Scope: this covers both SKILLS and RULES. `check-updates.sh` prints a `##### SKILLS` section and a `##### RULES` section. Steps 2–7 below are the skill flow; step 9 is the rule flow. Rules differ: they have no "new upstream rule" discovery (any `.md` could be a rule), and their local copy carries kit frontmatter the upstream file does not, so rule diffs compare the Markdown body only.
+
+1. Run `scripts/check-updates.sh` from the kit root. It is read-only. Read both sections.
 2. For each `CHANGED` skill run `scripts/diff-upstream.sh <local_name>`. It is read-only for `skills/` and writes to an output dir:
    - `mine-vs-base.diff`: what the user changed since import.
    - `theirs-vs-base.diff`: what upstream changed since import.
@@ -25,17 +27,27 @@ Never import, overwrite or commit before the user approves each item.
 4. Present one table: skill, change type (new / changed / removed), one-line effect, overlap or process impact found in step 3 (or "-"), compatible with Kiro and Antigravity (needs rewrite for Cursor- or Claude-only features?), your recommendation.
 5. Discuss. For a new skill with overlap or process impact, don't default to "adopt as a separate skill" — present the real choices (keep both separate / merge into the existing skill / replace the existing skill / change the flow step) and let the user pick. Wait for the user's decision on every item: adopt, merge, replace, change the flow, skip, or defer.
 6. Apply each adopted item:
-   - New upstream skill, no merge/replace decided: `scripts/import.sh <source> <upstream_path> [local_name]`.
-   - New upstream skill the user chose to merge into an existing one: edit the existing skill's `SKILL.md` by hand to fold in the new content (don't run `import.sh`; `diff-upstream.sh` assumes one local folder per upstream skill, so a `selected.tsv` row would break it). Record the source and upstream sha in the merged skill's own text, and tell the user that later upstream changes to the merged-in skill will not be tracked automatically.
+   - New upstream skill, no merge/replace decided: `scripts/import-skill.sh <source> <upstream_path> [local_name]`.
+   - New upstream skill the user chose to merge into an existing one: edit the existing skill's `SKILL.md` by hand to fold in the new content (don't run `import-skill.sh`; `diff-upstream.sh` assumes one local folder per upstream skill, so a `skill-selected.tsv` row would break it). Record the source and upstream sha in the merged skill's own text, and tell the user that later upstream changes to the merged-in skill will not be tracked automatically.
    - New upstream skill the user chose to replace an existing one with: import it under the old `local_name` (overwriting), and say what capability the old one had that is now dropped, if any.
    - Decided flow change (e.g. a step in `upstream-sync` itself, or another kit skill, should work differently): edit that skill's `SKILL.md` directly and summarize the behavior change.
-   - Changed skill the user had edited: never run `import.sh` (it overwrites the user's edits). Resolve conflicts in `merged/` with the user, then run
-     `rsync -a --delete <outdir>/merged/ skills/<local_name>/` and set the 4th column of its `upstream/selected.tsv` row to `$(cat <outdir>/head.sha)`.
-   - Changed skill without user edits: `import.sh` is fine.
+   - Changed skill the user had edited: never run `import-skill.sh` (it overwrites the user's edits). Resolve conflicts in `merged/` with the user, then run
+     `rsync -a --delete <outdir>/merged/ skills/<local_name>/` and set the 4th column of its `upstream/skill-selected.tsv` row to `$(cat <outdir>/head.sha)`.
+   - Changed skill without user edits: `import-skill.sh` is fine.
    - Skipped or deferred change: leave the sha as is, so the next check reports it again.
    For tool-specific wording (Cursor subagents, `/plugin`), edit the local copy and tell the user what changed.
-7. Update `CATALOG.md` ticks for what was decided, including merges/replacements (note the merge target instead of a plain checkmark). Append every new skill that was adopted, merged, replaced or skipped to `upstream/reviewed.txt` as `<source> <upstream_path>` so the next check stops listing it. Leave deferred ones out.
+7. Update `CATALOG.md` ticks for what was decided, including merges/replacements (note the merge target instead of a plain checkmark). Append every new skill that was adopted, merged, replaced or skipped to `upstream/skill-reviewed.txt` as `<source> <upstream_path>` so the next check stops listing it. Leave deferred ones out.
 8. Show `git status` and stop. Commit only when the user asks.
+
+## Rule flow (the `##### RULES` section)
+
+9. For each `CHANGED` rule:
+   - Run `scripts/diff-upstream.sh --rule <local_name>`. It compares the Markdown body only and writes `mine-vs-base.diff` (your edits), `theirs-vs-base.diff` (official edits) and `merged-body.md`.
+   - Summarize the two diffs separately. Watch for upstream wording that names a tool absent from Kiro/Antigravity (subagents, `/commands`) — flag it as needing a rewrite, since a rule is injected verbatim into the prompt.
+   - Discuss and wait for the user's decision: adopt, skip, or defer.
+   - To adopt: take `merged-body.md`, re-apply the rule's kit frontmatter on top (keep the existing `kit_load`, `kit_targets`, `kit_source`), write it back to `rules/<local_name>.md`, resolve any `<<<<<<<` conflict with the user first, and set the 5th column (`imported_sha`) of its `upstream/rule-selected.tsv` row to `$(cat <outdir>/head.sha)`. Then rerun `./setup.sh <tool> --only rules` so the installed rule files regenerate.
+   - Skip/defer: leave the sha as is.
+   There is no "new upstream rule" step: the user picks which upstream file becomes a rule and imports it by hand with `scripts/import-rule.sh <source> <file_path> <local_name> [kit_load]`.
 
 ## Rules
 
