@@ -36,7 +36,7 @@ Scope: this covers both SKILLS and RULES. `kit.py check-updates` prints a `#####
    - Changed skill without user edits: `python kit.py import-skill` is fine.
    - Skipped or deferred change: leave the sha as is, so the next check reports it again.
    For tool-specific wording (Cursor subagents, `/plugin`), edit the local copy and tell the user what changed.
-7. Update `CATALOG.md` ticks for what was decided, including merges/replacements (note the merge target instead of a plain checkmark). Append every new skill that was adopted, merged, replaced or skipped to `upstream/skill-reviewed.txt` as `<source> <upstream_path>` so the next check stops listing it. Leave deferred ones out.
+7. Append every new skill that was adopted, merged, replaced or skipped to `upstream/skill-reviewed.txt` as `<source> <upstream_path>` so the next check stops listing it. Leave deferred ones out.
 8. Show `git status` and stop. Commit only when the user asks.
 
 ## Rule flow (the `##### RULES` section)

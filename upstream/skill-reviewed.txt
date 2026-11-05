@@ -1,4 +1,4 @@
-# source path   -- upstream skills already shown in CATALOG.md; check-updates.sh lists only skills missing here
+# source path   -- upstream skills already reviewed; kit.py check-updates lists only skills missing here
 mattpocock engineering/ask-matt
 mattpocock engineering/codebase-design
 mattpocock engineering/code-review
