@@ -3,7 +3,7 @@
 # whatever gets added later) for one or more AI tools, in one run.
 #
 # Usage: ./setup.sh <target>... [--workspace DIR] [--only skills|rules]
-#   targets:      kiro | antigravity | all   (global scope by default)
+#   targets:      any name in config/tools.tsv, or 'all' (global scope by default)
 #   --workspace:  install into DIR's project-level folders instead of global
 #   --only:       run just one installer (repeatable); default runs all
 #
@@ -14,6 +14,7 @@
 #   ./setup.sh kiro --only rules           # just rules
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
+. "$here/scripts/lib/tools.sh"
 
 # Each installer: "<label> <script> <relative glob it needs>".
 # Add a line here when the kit grows a new managed thing (e.g. mcp, hooks);
@@ -30,8 +31,12 @@ while [ $# -gt 0 ]; do
     *) args+=("$1"); shift ;;
   esac
 done
-# need at least one target in the passed-through args
-case " ${args[*]} " in *" kiro "*|*" antigravity "*|*" all "*) ;; *) sed -n '2,13p' "$0"; exit 2 ;; esac
+# need at least one valid target (a name in tools.tsv, or all) in the args
+have_target=0
+for a in "${args[@]}"; do
+  if [ "$a" = all ] || resolve_target "$a" >/dev/null 2>&1; then have_target=1; break; fi
+done
+[ "$have_target" = 1 ] || { sed -n '2,13p' "$0"; exit 2; }
 
 run_one() { # label script glob
   local label=$1 script=$2 glob=$3
