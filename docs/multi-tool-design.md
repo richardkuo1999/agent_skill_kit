@@ -38,6 +38,19 @@ already uses). Installs by format conversion, one file per rule.
 | Antigravity | `~/.gemini/config/rules` | `.agents/rules` | `trigger` |
 | Cursor | (no file-based global; User Rules live in the UI) | `.cursor/rules/*.mdc` | `alwaysApply` / `globs` / `description` | shipped |
 
+Cursor global rules are intentionally not supported (decided 2026-11):
+- Cursor's global "User Rules" live in `globalStorage/state.vscdb` (SQLite) and
+  sync to the Cursor account. There is no official file interface; writing the DB
+  is undocumented, sync-conflicting, and the file can be hundreds of GB — out of
+  bounds for this kit's "official interfaces only, no hacks" rule.
+- `~/.cursor/rules/` as a global location appears only in community posts; the
+  official docs define `.cursor/rules` as project-scoped only. Not relied on.
+- A home-dir `AGENTS.md` is not documented as global either.
+So Cursor installs project rules (`.cursor/rules/*.mdc`) only; a global Cursor
+rule is set by the user by hand in Settings → Rules → User Rules. A possible
+"pseudo-global via per-project AGENTS.md" is noted under the B-class merge work,
+not built.
+
 **B class: a single file, no per-rule frontmatter.** Needs the merge strategy below.
 
 | tool | global file | project file |
