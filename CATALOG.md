@@ -1,7 +1,7 @@
 # Skill 清單（請勾選要引入的項目）
 
-勾選方式：把 `[ ]` 改成 `[x]`。勾完告訴 Kiro，由 `scripts/import-skill.sh` 逐個匯入。
-若要把某個項目當 rule 引入（例如 pstack 的 `principle-*` 或 mattpocock 的 `AGENTS.md`），改用 `scripts/import-rule.sh`。
+勾選方式：把 `[ ]` 改成 `[x]`。勾完告訴 Kiro，由 `python kit.py import-skill` 逐個匯入。
+若要把某個項目當 rule 引入（例如 pstack 的 `principle-*` 或 mattpocock 的 `AGENTS.md`），改用 `python kit.py import-rule`。
 
 相容欄說明：
 - ✅ 內容看起來與工具無關，可直接用

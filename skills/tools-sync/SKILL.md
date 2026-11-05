@@ -5,10 +5,10 @@ description: Check whether any AI tool moved the file paths this kit installs in
 
 # tools-sync
 
-Kit root: the directory holding `config/` and `scripts/` (from this skill's real path, `readlink -f`).
+Kit root: the directory holding `config/` and `kit.py` (from this skill's real path, `readlink -f`).
 Reply to the user in Traditional Chinese (Taiwan terms).
 
-This is the judgment half of the kit's split: `install-*.sh` scripts are
+This is the judgment half of the kit's split: `kit.py install` is
 deterministic; THIS skill has the agent read vendor docs (prose, not an API) and
 decide whether a path moved. Never edit a table before the user approves each change.
 

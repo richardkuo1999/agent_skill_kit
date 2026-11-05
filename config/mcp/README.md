@@ -1,6 +1,6 @@
 # config/mcp/
 
-One MCP server per `<name>.json`, tool-agnostic. `install-mcp.sh` converts each
+One MCP server per `<name>.json`, tool-agnostic. `python kit.py install` converts each
 into the target tool's shape (JSON `mcpServers` or TOML `[mcp_servers.*]`) and
 merges it into that tool's config file, preserving the user's other servers.
 
