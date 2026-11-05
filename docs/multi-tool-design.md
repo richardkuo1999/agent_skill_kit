@@ -20,7 +20,7 @@ install by symlink; only the path differs.
 | Antigravity | `~/.gemini/config/skills` | `.agents/skills` | shipped |
 | Claude Code | `~/.claude/skills` | `.claude/skills` | high |
 | Codex | `~/.codex/skills` | `.agents/skills` | high |
-| Cursor | `~/.cursor/skills` or `~/.agents/skills` | `.cursor/skills` or `.agents/skills` | high (official) |
+| Cursor | `~/.cursor/skills` | `.cursor/skills` | shipped |
 | Copilot | — | — | no skill concept |
 
 `.agents/skills/` is shared by Antigravity, Codex and Cursor. A project-level
@@ -36,7 +36,7 @@ already uses). Installs by format conversion, one file per rule.
 |------|-----------------|------------------|-------------|
 | Kiro | `~/.kiro/steering` | `.kiro/steering` | `inclusion` |
 | Antigravity | `~/.gemini/config/rules` | `.agents/rules` | `trigger` |
-| Cursor | (no global) | `.cursor/rules/*.mdc` | `alwaysApply` / `globs` / `description` |
+| Cursor | (no file-based global; User Rules live in the UI) | `.cursor/rules/*.mdc` | `alwaysApply` / `globs` / `description` | shipped |
 
 **B class: a single file, no per-rule frontmatter.** Needs the merge strategy below.
 
@@ -129,7 +129,12 @@ Adding an A-class tool = one `tools.tsv` row + one `fmt_*`. Adding a B-class too
 
 1. Refactor only; behavior unchanged (still kiro + antigravity). Run existing
    tests to confirm equivalence.
-2. Add Cursor (A class, same model as current tools — lowest risk).
+2. Add Cursor (A class, same model as current tools — lowest risk). DONE. Needed
+   two generalizations: marker moved from "line 1" to "anywhere, grep-matched"
+   (Cursor .mdc must start with ---, so its marker is an HTML comment after the
+   frontmatter), and `install_dir` now checks the scope actually in use (Cursor
+   has project rules but no file-based global rules). A `rule_ext` column lets
+   Cursor write .mdc while others write .md.
 3. Add Claude Code and Codex skills (symlink, nearly free).
 4. Add B-class rule merge (`merge_single_file`) last; test it in isolation.
 

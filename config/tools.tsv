@@ -4,10 +4,12 @@
 #   skill_global  global skill dir ('-' if the tool has no skills)
 #   skill_project project skill dir ('-' if none)
 #   rule_class    A = folder of per-rule files | B = single merged file
-#   rule_global   A: global rule dir | B: global single file
+#   rule_global   A: global rule dir | B: global single file | '-' if no file-based global
 #   rule_project  A: project rule dir | B: project single file
 #   rule_fmt      converter function in scripts/lib/tools.sh (A class only; '-' for B)
+#   rule_ext      extension for installed rule files (md, mdc, ...)
 #   doc_url       official doc page, entry point for the tools-sync skill
 # ~ expands to $HOME. --workspace DIR overrides the *_project paths' base.
-kiro	~/.kiro/skills	.kiro/skills	A	~/.kiro/steering	.kiro/steering	fmt_kiro	https://kiro.dev/docs/steering/
-antigravity	~/.gemini/config/skills	.agents/skills	A	~/.gemini/config/rules	.agents/rules	fmt_antigravity	https://antigravity.google/docs/rules
+kiro	~/.kiro/skills	.kiro/skills	A	~/.kiro/steering	.kiro/steering	fmt_kiro	md	https://kiro.dev/docs/steering/
+antigravity	~/.gemini/config/skills	.agents/skills	A	~/.gemini/config/rules	.agents/rules	fmt_antigravity	md	https://antigravity.google/docs/rules
+cursor	~/.cursor/skills	.cursor/skills	A	-	.cursor/rules	fmt_cursor	mdc	https://cursor.com/docs/context/rules
