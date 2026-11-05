@@ -84,6 +84,12 @@ python kit.py check-public
 2. Port one piece at a time, each diffed against its bash output for equivalence
    on Linux (same method as the earlier refactor): install-skill → install-rule →
    install-mcp → import → check-updates → diff → check-public → setup.
+   PROGRESS: kitlib.py (table read, ~ expand, frontmatter, secrets) + kit.py
+   `install` SKILLS done — symlink tree matches install-skill.sh exactly (18
+   links across 6 tools), --copy and --workspace verified, unknown tool exits 1.
+   Written 3.11-targeted but kept runnable on this host's 3.6 so the diff works
+   (no `from __future__ annotations`, no PEP 585 generics, no required=True
+   subparsers). Next: install rules, then install mcp.
 3. Keep the bash scripts in place until the Python set passes the smoke test on
    Linux AND a real run on Windows. Only then decide whether to delete bash or
    keep both.
