@@ -112,6 +112,15 @@ def main():
                      for f in (sb / d).rglob("*") if f.is_file())
         check(not leaked, "no secret leaked into tracked dirs")
 
+        # _clean_desc: list-skills description tidying
+        sys.path.insert(0, str(sb))
+        import kit as _kit
+        cd = _kit._clean_desc
+        check(cd(">-") == "(multi-line; see SKILL.md)", "clean_desc flags block scalar")
+        check(cd('say \\"hi\\"') == 'say "hi"', "clean_desc unescapes quotes")
+        check(cd("a" * 200).endswith("..."), "clean_desc truncates long")
+        check(cd("plain one-liner") == "plain one-liner", "clean_desc keeps plain")
+
     finally:
         shutil.rmtree(work, ignore_errors=True)
 

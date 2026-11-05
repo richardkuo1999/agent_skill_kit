@@ -210,6 +210,58 @@ def _read_sources(fname):
     return rows
 
 
+def _clean_desc(desc):
+    """Tidy a frontmatter description for one-line display. split_frontmatter is a
+    minimal single-line YAML reader; when an upstream uses a block scalar (>-, >, |)
+    its value is not on the key line, so flag it instead of printing the marker."""
+    desc = desc.strip()
+    if desc in (">", ">-", "|", "|-", "") or desc.startswith((">", "|")):
+        return "(multi-line; see SKILL.md)"
+    desc = desc.replace('\\"', '"').replace("\n", " ").strip()
+    return desc[:97] + "..." if len(desc) > 100 else desc
+
+
+def cmd_list_skills(args) -> int:
+    """List every skill (a dir with SKILL.md) under a registered source's
+    skills_dir, with its frontmatter description. Read-only; fetches the repo
+    tarball once and reads locally, so it costs one API call, not one per skill."""
+    import shutil, tempfile
+    src = next((r for r in _read_sources("skill-sources.tsv") if r[0] == args.source), None)
+    if not src:
+        print("unknown source: " + args.source, file=sys.stderr)
+        print("registered sources: " +
+              ", ".join(r[0] for r in _read_sources("skill-sources.tsv")), file=sys.stderr)
+        return 1
+    _, repo, ref, skills_dir = src[0], src[1], src[2], src[3]
+    sha = kitlib.gh_commit_sha(repo, ref)
+    tmp = Path(tempfile.mkdtemp())
+    try:
+        r = kitlib.gh_extract(repo, sha, tmp)
+        base = r / skills_dir
+        if not base.is_dir():
+            print("no skills_dir {} in {}@{}".format(skills_dir, repo, ref[:9]),
+                  file=sys.stderr)
+            return 1
+        found = sorted(d.name for d in base.iterdir()
+                       if d.is_dir() and (d / "SKILL.md").is_file())
+        if not found:
+            print("no skills (dirs with SKILL.md) under {}".format(skills_dir))
+            return 0
+        imported = {row[1] for row in _read_sources("skill-selected.tsv")
+                    if row and row[0] == args.source}
+        print("{} skills in {}/{} @ {}".format(len(found), repo, skills_dir, sha[:9]))
+        for name in found:
+            fm, _ = kitlib.split_frontmatter((base / name / "SKILL.md").read_text(encoding="utf-8"))
+            desc = _clean_desc(fm.get("description", ""))
+            mark = "*" if name in imported else " "
+            print("  {} {:<28} {}".format(mark, name, desc))
+        if imported:
+            print("(* = already imported)")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    return 0
+
+
 def cmd_import_skill(args) -> int:
     import shutil, tempfile
     root = kitlib.kit_root()
@@ -633,6 +685,10 @@ def main(argv=None) -> int:
                     help="run just one installer (repeatable)")
     pi.add_argument("--copy", action="store_true", help="force copy instead of symlink")
     pi.set_defaults(func=cmd_install)
+
+    pls = sub.add_parser("list-skills", help="list a source's skills + descriptions")
+    pls.add_argument("source", help="a name registered in upstream/skill-sources.tsv")
+    pls.set_defaults(func=cmd_list_skills)
 
     ps = sub.add_parser("import-skill", help="import one upstream skill")
     ps.add_argument("source"); ps.add_argument("path")
