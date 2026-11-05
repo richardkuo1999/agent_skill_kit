@@ -188,3 +188,42 @@ def merge_single_file(dest: Path, block: str):
     parts.append(block)
     parts.append(KIT_BLOCK_END + "\n")
     dest.write_text("".join(parts), encoding="utf-8")
+
+
+# ---- MCP merge --------------------------------------------------------------
+# TOML: read+write via the third-party `toml` package on this 3.6 host; on the
+# 3.11 target, read with stdlib tomllib and write with tomli_w/toml. Kept simple:
+# use `toml` if importable (covers both until the target is wired up).
+
+def _load_toml(path: Path) -> dict:
+    if not path.exists() or path.stat().st_size == 0:
+        return {}
+    try:
+        import tomllib  # 3.11+
+        with path.open("rb") as f:
+            return tomllib.load(f)
+    except ImportError:
+        import toml
+        return toml.loads(path.read_text(encoding="utf-8"))
+
+
+def _dump_toml(path: Path, data: dict):
+    import toml  # tomllib has no writer; use the package (declared in requirements)
+    path.write_text(toml.dumps(data), encoding="utf-8")
+
+
+def merge_mcp_json(dest: Path, container: str, name: str, server: dict):
+    """Set data[container][name] = server in a JSON file, preserving other keys."""
+    import json
+    data = {}
+    if dest.exists() and dest.stat().st_size:
+        data = json.loads(dest.read_text(encoding="utf-8"))
+    data.setdefault(container, {})[name] = server
+    dest.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+
+
+def merge_mcp_toml(dest: Path, prefix: str, name: str, server: dict):
+    """Set data[prefix][name] = server in a TOML file, preserving other keys."""
+    data = _load_toml(dest)
+    data.setdefault(prefix, {})[name] = server
+    _dump_toml(dest, data)

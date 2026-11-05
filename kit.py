@@ -104,6 +104,48 @@ def _install_rules(t, row, args, root, marker_line):
         print("SKIP {}: unknown rule_class={}".format(t, rule_class))
 
 
+def _install_mcp(targets, args, root):
+    import json
+    mcp = kitlib.mcp_table()
+    secrets = kitlib.load_secrets()
+    srcs = sorted((root / "config" / "mcp").glob("*.json"))
+    for t in dict.fromkeys(targets):
+        if t not in mcp:
+            continue  # tool has no MCP row; skip silently
+        row = mcp[t]  # name mcp_global mcp_project fmt container doc_url
+        fmt, container = row[3], row[4]
+        if args.workspace:
+            scope = row[2]
+            if scope == "-":
+                print("SKIP {}: no project MCP file".format(t)); continue
+            dest = Path(args.workspace) / scope
+        else:
+            scope = row[1]
+            if scope == "-":
+                print("SKIP {}: no global MCP file".format(t)); continue
+            dest = kitlib.expand(scope)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        if not srcs:
+            print("SKIP {}: no servers in config/mcp/".format(t)); continue
+        for src in srcs:
+            name = src.stem
+            defn = json.loads(src.read_text(encoding="utf-8"))
+            tgts = defn.pop("targets", "all")
+            if not _targets_tool(tgts, t):
+                print("SKIP {}: {} (targets={})".format(t, name, tgts)); continue
+            try:
+                defn = kitlib.substitute_secrets(defn, secrets)
+            except KeyError as e:
+                print("ERROR {}: {} missing secret {} in config/secrets.env"
+                      .format(t, name, e.args[0]), file=sys.stderr)
+                return
+            if fmt == "json":
+                kitlib.merge_mcp_json(dest, container, name, defn)
+            else:
+                kitlib.merge_mcp_toml(dest, container, name, defn)
+            print("OK   {}: {}".format(t, name))
+
+
 def cmd_install(args: argparse.Namespace) -> int:
     tools = kitlib.tools_table()
     try:
@@ -117,6 +159,7 @@ def cmd_install(args: argparse.Namespace) -> int:
     only = set(args.only or [])
     want_skills = (not only) or ("skills" in only)
     want_rules = (not only) or ("rules" in only)
+    want_mcp = (not only) or ("mcp" in only)
     root = kitlib.kit_root()
     copied_any = False
     marker_line = "# " + kitlib.KIT_MARKER
@@ -146,7 +189,9 @@ def cmd_install(args: argparse.Namespace) -> int:
                         print(f"OK   {t}: {name} ({mode})")
         if want_rules:
             _install_rules(t, row, args, root, marker_line)
-        # mcp install: ported in a later batch (bash still handles it)
+
+    if want_mcp:
+        _install_mcp(targets, args, root)
 
     if copied_any:
         print("note: some skills were COPIED (no symlink privilege); "
