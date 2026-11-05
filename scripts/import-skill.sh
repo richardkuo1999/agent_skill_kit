@@ -8,7 +8,7 @@ src=$1; path=$2; local_name=${3:-$2}
 IFS=$'\t' read -r _ repo ref dir lic < <(awk -F'\t' -v s="$src" '$1==s' upstream/skill-sources.tsv)
 [ -n "${repo:-}" ] || { echo "unknown source: $src" >&2; exit 1; }
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
-# tarball of an exact sha (git on the build server is too old for sparse clone)
+# tarball of an exact sha (works even where git is too old for a sparse clone)
 sha=$(gh api "repos/$repo/commits/$ref" --jq .sha)
 mkdir "$tmp/r"; gh api "repos/$repo/tarball/$sha" > "$tmp/t.tgz"
 tar -xzf "$tmp/t.tgz" -C "$tmp/r" --strip-components=1
