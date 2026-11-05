@@ -11,8 +11,8 @@ Two ways to add a rule file:
 - Write your own `.md` directly in this format.
 - Import one from an upstream repo with `python kit.py import-rule <source> <file_path> <local_name> [kit_load]`
   (sources are in `upstream/rule-sources.tsv`). Imported rules get a `kit_source`
-  frontmatter line and are tracked for upstream changes by `check-updates.sh` and
-  `diff-upstream.sh --rule <local_name>`.
+  frontmatter line and are tracked for upstream changes by `python kit.py
+  check-updates` and `python kit.py diff --rule <local_name>`.
 
 ## Source file format
 
@@ -66,5 +66,5 @@ Re-running overwrites only files that carry that marker; a hand-written rule of
 the same name is left untouched and reported.
 
 (*) Kiro's exact `fileMatchPattern` syntax for multiple patterns is not yet
-confirmed. `install-rules.sh` writes the raw `globs` value through. Verify a
+confirmed. `kit.py install` writes the raw `globs` value through. Verify a
 `glob` rule loads correctly the first time you install one on Kiro.
