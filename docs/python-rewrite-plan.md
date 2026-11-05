@@ -102,8 +102,15 @@ python kit.py check-public
    urllib+tarfile (no gh/tar), byte-matching bash incl. selected rows and
    license. check-updates done — git/trees + contents-blob comparison replace
    gh/compare; SKILLS and RULES sections match bash. _gh_get honors an optional
-   GITHUB_TOKEN/GH_TOKEN to lift the 60/hr anonymous limit. Next: diff-upstream
-   (three-way; keep `git merge-file`), then check-public, setup, smoke-test.
+   GITHUB_TOKEN/GH_TOKEN to lift the 60/hr anonymous limit.
+   diff done — skill (folder three-way) and rule (body-only) modes. base/head,
+   conflict detection, DELETED/NEW UPSTREAM, and the merged tree all match
+   diff-upstream.sh; git merge-file is kept for the merge. One intentional
+   non-equivalence: the "changed lines" COUNT can differ by a line or two
+   because Python's difflib groups hunks differently from GNU diff — the diff
+   CONTENT (what the agent actually reads) is the same, and the count is only a
+   size hint, so this is acceptable and noted. Next: check-public, setup,
+   smoke-test, then delete bash.
 3. Keep the bash scripts in place until the Python set passes the smoke test on
    Linux AND a real run on Windows. Only then decide whether to delete bash or
    keep both.

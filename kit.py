@@ -358,6 +358,165 @@ def _skill_changed(repo, base, head, sdir, path):
     return a != b
 
 
+def _udiff(a_path, b_path, a_label, b_label):
+    """unified diff text between two files (missing file -> empty side)."""
+    import difflib
+    def read(p):
+        return p.read_text(encoding="utf-8").splitlines(keepends=True) if p.exists() else []
+    return "".join(difflib.unified_diff(read(a_path), read(b_path),
+                                        fromfile=a_label, tofile=b_label))
+
+
+def _changed_lines(diff_text):
+    """Count +/- content lines in a unified diff (not the +++/--- headers).
+    A rough change-size indicator for the agent, not a byte contract; GNU diff and
+    difflib can differ by a line or two on how they group a hunk."""
+    n = 0
+    for ln in diff_text.splitlines():
+        if ln[:3] in ("+++", "---"):
+            continue
+        if ln[:1] in "+-":
+            n += 1
+    return n
+
+
+def _git_merge_file(merged, base, theirs):
+    """Run `git merge-file merged base theirs`. Returns True if clean, False on
+    conflict (which leaves <<<<<<< markers in `merged`)."""
+    import subprocess
+    r = subprocess.run(["git", "merge-file", str(merged), str(base), str(theirs)])
+    return r.returncode == 0
+
+
+def _strip_frontmatter(text):
+    _, body = kitlib.split_frontmatter(text)
+    return body
+
+
+def cmd_diff(args) -> int:
+    import shutil, tempfile, os as _os
+    root = kitlib.kit_root()
+    scratch = _os.environ.get("KIROCREW_SCRATCH") or tempfile.gettempdir()
+
+    if args.rule:
+        name = args.name
+        row = next((r for r in _read_sources("rule-selected.tsv") if r[2] == name), None)
+        if not row:
+            print("not an imported rule: " + name, file=sys.stderr); return 1
+        src, fpath, base = row[0], row[1], row[4]
+        s = next((r for r in _read_sources("rule-sources.tsv") if r[0] == src), None)
+        repo, ref = s[1], s[2]
+        head = kitlib.gh_commit_sha(repo, ref)
+        out = Path(args.outdir or (Path(scratch) / ("diffrule-" + name)))
+        if out.exists():
+            shutil.rmtree(out)
+        out.mkdir(parents=True)
+
+        def upbody(sha, dst):
+            tmp = Path(tempfile.mkdtemp())
+            r = kitlib.gh_extract(repo, sha, tmp)
+            dst.write_text(_strip_frontmatter((r / fpath).read_text(encoding="utf-8")),
+                           encoding="utf-8")
+            shutil.rmtree(tmp, ignore_errors=True)
+
+        upbody(base, out / "base.md")
+        upbody(head, out / "theirs.md")
+        (out / "mine.md").write_text(
+            _strip_frontmatter((root / "rules" / (name + ".md")).read_text(encoding="utf-8")),
+            encoding="utf-8")
+        mvb = _udiff(out / "base.md", out / "mine.md", "base.md", "mine.md")
+        tvb = _udiff(out / "base.md", out / "theirs.md", "base.md", "theirs.md")
+        (out / "mine-vs-base.diff").write_text(mvb, encoding="utf-8")
+        (out / "theirs-vs-base.diff").write_text(tvb, encoding="utf-8")
+        shutil.copy(out / "mine.md", out / "merged-body.md")
+        clean = _git_merge_file(out / "merged-body.md", out / "base.md", out / "theirs.md")
+        if not clean:
+            print("CONFLICT in body")
+        (out / "head.sha").write_text(head + "\n", encoding="utf-8")
+        print("base={} head={} conflicts={}".format(base[:9], head[:9], 0 if clean else 1))
+        print("mine-vs-base: {} changed body lines (your edits)".format(_changed_lines(mvb)))
+        print("theirs-vs-base: {} changed body lines (official edits)".format(_changed_lines(tvb)))
+        print("merged body (reapply your kit frontmatter on top): {}/merged-body.md".format(out))
+        print("output: " + str(out))
+        return 0
+
+    # skill mode
+    name = args.name
+    row = next((r for r in _read_sources("skill-selected.tsv") if r[2] == name), None)
+    if not row:
+        print("not imported: " + name, file=sys.stderr); return 1
+    src, path, base = row[0], row[1], row[3]
+    s = next((r for r in _read_sources("skill-sources.tsv") if r[0] == src), None)
+    repo, ref, sdir = s[1], s[2], s[3]
+    head = kitlib.gh_commit_sha(repo, ref)
+    out = Path(args.outdir or (Path(scratch) / ("diff-" + name)))
+    if out.exists():
+        shutil.rmtree(out)
+    for d in ("base", "theirs", "merged"):
+        (out / d).mkdir(parents=True)
+
+    def fetch(sha, dst):
+        tmp = Path(tempfile.mkdtemp())
+        r = kitlib.gh_extract(repo, sha, tmp)
+        srcdir = r / sdir / path
+        if srcdir.is_dir():
+            for f in srcdir.rglob("*"):
+                if f.is_file():
+                    rel = f.relative_to(srcdir)
+                    (dst / rel).parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy(f, dst / rel)
+        shutil.rmtree(tmp, ignore_errors=True)
+
+    fetch(base, out / "base")
+    fetch(head, out / "theirs")
+    mine = root / "skills" / name
+    (out / "mine-vs-base.diff").write_text(
+        _tree_diff(out / "base", mine, "base", "mine"), encoding="utf-8")
+    (out / "theirs-vs-base.diff").write_text(
+        _tree_diff(out / "base", out / "theirs", "base", "theirs"), encoding="utf-8")
+
+    files = set()
+    for d in (out / "base", out / "theirs", mine):
+        if d.exists():
+            files |= {f.relative_to(d) for f in d.rglob("*") if f.is_file()}
+    conflicts = 0
+    for rel in sorted(files, key=str):
+        b, t, m = out / "base" / rel, out / "theirs" / rel, mine / rel
+        md = out / "merged" / rel
+        md.parent.mkdir(parents=True, exist_ok=True)
+        if b.is_file() and t.is_file() and m.is_file():
+            shutil.copy(m, md)
+            if not _git_merge_file(md, b, t):
+                print("CONFLICT  {}".format(rel)); conflicts += 1
+        elif m.is_file() and not t.is_file() and b.is_file():
+            print("DELETED UPSTREAM  {}".format(rel))
+        elif t.is_file() and not b.is_file() and not m.is_file():
+            print("NEW UPSTREAM      {}".format(rel)); shutil.copy(t, md)
+        elif m.is_file():
+            shutil.copy(m, md)
+    (out / "head.sha").write_text(head + "\n", encoding="utf-8")
+    mvb = (out / "mine-vs-base.diff").read_text(encoding="utf-8")
+    tvb = (out / "theirs-vs-base.diff").read_text(encoding="utf-8")
+    print("base={} head={} conflicts={}".format(base[:9], head[:9], conflicts))
+    print("mine-vs-base: {} changed lines (your edits)".format(_changed_lines(mvb)))
+    print("theirs-vs-base: {} changed lines (official edits)".format(_changed_lines(tvb)))
+    print("output: " + str(out))
+    return 0
+
+
+def _tree_diff(a_dir, b_dir, a_label, b_label):
+    """Recursive unified diff of two dirs (like diff -ruN), stable file order."""
+    files = set()
+    for d in (a_dir, b_dir):
+        if d.exists():
+            files |= {f.relative_to(d) for f in d.rglob("*") if f.is_file()}
+    chunks = []
+    for rel in sorted(files, key=str):
+        chunks.append(_udiff(a_dir / rel, b_dir / rel,
+                             "{}/{}".format(a_label, rel), "{}/{}".format(b_label, rel)))
+    return "".join(chunks)
+
+
 def _upsert_selected(fname, source, path, local, sha, key_cols, extra=None):
     """Replace any row matching (source, path) in upstream/<fname>, then append.
     key_cols=2 means the first two columns identify the row. extra (rule load)
@@ -403,6 +562,12 @@ def main(argv=None) -> int:
 
     pc = sub.add_parser("check-updates", help="list upstream changes (read-only)")
     pc.set_defaults(func=cmd_check_updates)
+
+    pd = sub.add_parser("diff", help="three-way compare an imported skill or rule")
+    pd.add_argument("name")
+    pd.add_argument("outdir", nargs="?", default=None)
+    pd.add_argument("--rule", action="store_true", help="rule mode (single file, body only)")
+    pd.set_defaults(func=cmd_diff)
 
     args = p.parse_args(argv)
     if not getattr(args, "cmd", None):
