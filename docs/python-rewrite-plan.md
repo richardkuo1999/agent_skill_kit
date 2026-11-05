@@ -109,8 +109,12 @@ python kit.py check-public
    non-equivalence: the "changed lines" COUNT can differ by a line or two
    because Python's difflib groups hunks differently from GNU diff — the diff
    CONTENT (what the agent actually reads) is the same, and the count is only a
-   size hint, so this is acceptable and noted. Next: check-public, setup,
-   smoke-test, then delete bash.
+   size hint, so this is acceptable and noted.
+   check-public done — git history + worktree scan via subprocess git; seven
+   checks match check-public.sh, exits 0 clean and 1 on a planted sk- token.
+   setup done — `kit.py setup` is an alias of `install` (one run does
+   skills+rules+mcp), matching setup.sh's single-entry habit. Next: port the
+   smoke test to test_kit.py (the equivalence gate), then delete bash.
 3. Keep the bash scripts in place until the Python set passes the smoke test on
    Linux AND a real run on Windows. Only then decide whether to delete bash or
    keep both.

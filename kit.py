@@ -358,6 +358,91 @@ def _skill_changed(repo, base, head, sdir, path):
     return a != b
 
 
+def cmd_check_public(args) -> int:
+    import re as _re
+    import subprocess
+    root = kitlib.kit_root()
+    fail = [0]
+    def ok(m): print("PASS  " + m)
+    def bad(m): print("FAIL  " + m); fail[0] = 1
+    def warn(m): print("WARN  " + m)
+
+    def git(*a):
+        r = subprocess.run(["git", "-C", str(root)] + list(a),
+                           stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        return r.stdout.decode("utf-8", "ignore")
+
+    # 1. secrets.env never committed (appears as its own path line in history)
+    names = git("log", "--all", "--format=%H", "--name-only")
+    if any(ln.strip() == "config/secrets.env" for ln in names.splitlines()):
+        bad("config/secrets.env IS in git history — scrub it before pushing")
+    else:
+        ok("config/secrets.env never appears in history")
+
+    # 2. gitignored
+    r = subprocess.run(["git", "-C", str(root), "check-ignore", "config/secrets.env"],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    ok("config/secrets.env is gitignored") if r.returncode == 0 else bad("config/secrets.env is NOT gitignored")
+
+    # 3. example tracked
+    r = subprocess.run(["git", "-C", str(root), "ls-files", "--error-unmatch",
+                        "config/secrets.env.example"], stdout=subprocess.DEVNULL,
+                       stderr=subprocess.DEVNULL)
+    ok("config/secrets.env.example is tracked") if r.returncode == 0 else warn("example template not tracked")
+
+    # 4. token-shaped strings anywhere in history
+    allp = git("log", "--all", "-p")
+    tokpat = _re.compile(r"sk-[a-z0-9]{10,}|ghp_[a-z0-9]{10,}|AKIA[A-Z0-9]{12,}|"
+                         r"-----BEGIN [A-Z ]*PRIVATE KEY|xox[baprs]-[a-z0-9-]{10,}", _re.I)
+    hits = [ln for ln in allp.splitlines() if tokpat.search(ln)]
+    if hits:
+        bad("token-shaped strings found in history:")
+        for h in hits[:5]:
+            print("      " + h)
+    else:
+        ok("no token-shaped strings in history")
+
+    # 5. real secret assignments (excluding refs/examples)
+    asg = _re.compile(r"^\+.*(TOKEN|SECRET|API_KEY|PASSWORD)[ \t]*[=:]", _re.I)
+    skip = _re.compile(r"KIT_SECRET|replace-me|secrets\.env|example|^\+#|placeholder", _re.I)
+    leaks = [ln for ln in allp.splitlines() if asg.search(ln) and not skip.search(ln)]
+    if leaks:
+        warn("possible secret assignments (review each):")
+        for h in leaks[:5]:
+            print("      " + h)
+    else:
+        ok("no real secret assignments in history")
+
+    # 6. embedded credentials in worktree skills/rules/mcp
+    emb = []
+    for d in ("skills", "rules", "config/mcp"):
+        base = root / d
+        if base.exists():
+            for f in base.rglob("*"):
+                if f.is_file() and tokpat.search(f.read_text(encoding="utf-8", errors="ignore")):
+                    emb.append(str(f.relative_to(root)))
+    if emb:
+        bad("embedded credential-shaped strings in:")
+        for e in emb:
+            print("      " + e)
+    else:
+        ok("no embedded credentials in skills/ rules/ config/mcp/")
+
+    # 7. single author email (info)
+    authors = sorted(set(a for a in git("log", "--all", "--format=%ae").split() if a))
+    if len(authors) <= 1:
+        ok("single commit-author email: " + (authors[0] if authors else "(none)"))
+    else:
+        warn("multiple author emails (confirm all are intended to be public):")
+        for a in authors:
+            print("      " + a)
+
+    print()
+    print("RESULT: safe to push (review any WARN above)." if not fail[0]
+          else "RESULT: DO NOT PUSH — fix the FAIL items first.")
+    return fail[0]
+
+
 def _udiff(a_path, b_path, a_label, b_label):
     """unified diff text between two files (missing file -> empty side)."""
     import difflib
@@ -568,6 +653,17 @@ def main(argv=None) -> int:
     pd.add_argument("outdir", nargs="?", default=None)
     pd.add_argument("--rule", action="store_true", help="rule mode (single file, body only)")
     pd.set_defaults(func=cmd_diff)
+
+    pcp = sub.add_parser("check-public", help="pre-push safety scan (read-only)")
+    pcp.set_defaults(func=cmd_check_public)
+
+    # setup = install (skills+rules+mcp in one run); alias for the bash setup.sh habit
+    psetup = sub.add_parser("setup", help="install everything (alias of install)")
+    psetup.add_argument("target", nargs="+")
+    psetup.add_argument("--workspace")
+    psetup.add_argument("--only", action="append", choices=["skills", "rules", "mcp"])
+    psetup.add_argument("--copy", action="store_true")
+    psetup.set_defaults(func=cmd_install)
 
     args = p.parse_args(argv)
     if not getattr(args, "cmd", None):
