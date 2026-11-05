@@ -278,6 +278,86 @@ def cmd_import_rule(args) -> int:
     return 0
 
 
+def cmd_check_updates(args) -> int:
+    root = kitlib.kit_root()
+
+    def rows(fname):
+        return _read_sources(fname)
+
+    print("##### SKILLS")
+    # skill-reviewed.txt is space-separated "<source> <path>", not tab
+    reviewed = {}
+    f = root / "upstream" / "skill-reviewed.txt"
+    if f.exists():
+        for ln in f.read_text(encoding="utf-8").splitlines():
+            if ln and not ln.lstrip().startswith("#"):
+                parts = ln.split()
+                if len(parts) >= 2:
+                    reviewed.setdefault(parts[0], set()).add(parts[1])
+    selected = {}
+    for r in rows("skill-selected.tsv"):
+        selected.setdefault(r[0], []).append(r)  # source path local sha
+    for src in rows("skill-sources.tsv"):
+        name, repo, ref, sdir = src[0], src[1], src[2], src[3]
+        head = kitlib.gh_commit_sha(repo, ref)
+        print("== {} ({}@{}) head={}".format(name, repo, ref, head[:9]))
+        tree = kitlib.gh_tree(repo, ref)
+        upstream_skills = sorted({p[len(sdir)+1:-len("/SKILL.md")]
+                                  for p in tree
+                                  if p.startswith(sdir + "/") and p.endswith("/SKILL.md")})
+        known = set(x[1] for x in selected.get(name, [])) | reviewed.get(name, set())
+        for row in selected.get(name, []):
+            p, sha = row[1], row[3]
+            if p not in upstream_skills:
+                print("   REMOVED/RENAMED upstream: " + p); continue
+            if sha == head:
+                print("   same    " + p); continue
+            # did any file under the skill dir change between sha and head?
+            changed = _skill_changed(repo, sha, head, sdir, p)
+            print(("   CHANGED " if changed else "   same    ") + p)
+        print("   new upstream skills (not in skill-reviewed.txt):")
+        for p in upstream_skills:
+            if p not in known:
+                print("     + " + p)
+
+    print("##### RULES")
+    rsel = {}
+    for r in rows("rule-selected.tsv"):
+        rsel.setdefault(r[0], []).append(r)  # source file local load sha
+    for src in rows("rule-sources.tsv"):
+        name, repo, ref = src[0], src[1], src[2]
+        if name not in rsel:
+            continue
+        head = kitlib.gh_commit_sha(repo, ref)
+        print("== {} ({}@{}) head={}".format(name, repo, ref, head[:9]))
+        for row in rsel[name]:
+            fpath, local, sha = row[1], row[2], row[4]
+            if sha == head:
+                print("   same    {} ({})".format(local, fpath)); continue
+            a = kitlib.gh_blob_sha(repo, sha, fpath)
+            b = kitlib.gh_blob_sha(repo, head, fpath)
+            print(("   same    " if a == b else "   CHANGED ") + "{} ({})".format(local, fpath))
+    return 0
+
+
+def _skill_changed(repo, base, head, sdir, path):
+    """True if any file under <sdir>/<path>/ differs between base and head.
+    Uses the compare API; on its pagination/limits, falls back to comparing the
+    SKILL.md blob sha (a change there is the common case)."""
+    import json, urllib.error
+    prefix = "{}/{}/".format(sdir, path)
+    try:
+        d = json.load(kitlib._gh_get("{}/repos/{}/compare/{}...{}".format(kitlib._GH, repo, base, head)))
+        files = [f["filename"] for f in (d.get("files") or [])]
+        if files:
+            return any(fn.startswith(prefix) for fn in files)
+    except urllib.error.HTTPError:
+        pass
+    a = kitlib.gh_blob_sha(repo, base, prefix + "SKILL.md")
+    b = kitlib.gh_blob_sha(repo, head, prefix + "SKILL.md")
+    return a != b
+
+
 def _upsert_selected(fname, source, path, local, sha, key_cols, extra=None):
     """Replace any row matching (source, path) in upstream/<fname>, then append.
     key_cols=2 means the first two columns identify the row. extra (rule load)
@@ -320,6 +400,9 @@ def main(argv=None) -> int:
     pr.add_argument("kit_load", nargs="?", default="always",
                     choices=["always", "glob", "manual", "model"])
     pr.set_defaults(func=cmd_import_rule)
+
+    pc = sub.add_parser("check-updates", help="list upstream changes (read-only)")
+    pc.set_defaults(func=cmd_check_updates)
 
     args = p.parse_args(argv)
     if not getattr(args, "cmd", None):

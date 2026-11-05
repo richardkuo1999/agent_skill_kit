@@ -235,7 +235,12 @@ _GH = "https://api.github.com"
 
 def _gh_get(url: str, accept="application/vnd.github+json"):
     import urllib.request
-    req = urllib.request.Request(url, headers={"Accept": accept, "User-Agent": "agent_skill_kit"})
+    headers = {"Accept": accept, "User-Agent": "agent_skill_kit"}
+    # Optional token lifts the 60/hr anonymous rate limit; falls back to anonymous.
+    tok = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+    if tok:
+        headers["Authorization"] = "Bearer " + tok
+    req = urllib.request.Request(url, headers=headers)
     return urllib.request.urlopen(req, timeout=30)
 
 
@@ -258,3 +263,21 @@ def gh_extract(repo: str, sha: str, dest_dir: Path) -> Path:
     tf.close()
     roots = [p for p in dest_dir.iterdir() if p.is_dir()]
     return roots[0]  # GitHub wraps in one <owner>-<repo>-<sha> dir
+
+
+def gh_tree(repo: str, ref: str) -> list:
+    """Recursive list of every path in repo@ref (anonymous API)."""
+    import json
+    d = json.load(_gh_get("{}/repos/{}/git/trees/{}?recursive=1".format(_GH, repo, ref)))
+    return [e["path"] for e in d.get("tree", [])]
+
+
+def gh_blob_sha(repo: str, ref: str, path: str):
+    """The blob sha of one file at repo@ref, or None if absent. Comparing blob
+    shas tells if a file changed, independent of the compare API's size limits."""
+    import json, urllib.error
+    try:
+        d = json.load(_gh_get("{}/repos/{}/contents/{}?ref={}".format(_GH, repo, path, ref)))
+        return d.get("sha")
+    except urllib.error.HTTPError:
+        return None

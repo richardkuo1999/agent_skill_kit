@@ -95,7 +95,15 @@ python kit.py check-public
    hand-written protection and reinstall idempotence. Found and fixed a latent
    bug in BOTH versions while porting: merge_single_file accumulated a blank line
    on every reinstall; trailing blank lines in the kept (user) text are now
-   normalized to one. Next: install mcp.
+   normalized to one.
+   install MCP done — json via stdlib, toml via tomllib-read/toml-write,
+   KIT_SECRET substitution, existing-server preservation; byte-matches
+   install-mcp.sh. import-skill/import-rule done — anonymous GitHub via
+   urllib+tarfile (no gh/tar), byte-matching bash incl. selected rows and
+   license. check-updates done — git/trees + contents-blob comparison replace
+   gh/compare; SKILLS and RULES sections match bash. _gh_get honors an optional
+   GITHUB_TOKEN/GH_TOKEN to lift the 60/hr anonymous limit. Next: diff-upstream
+   (three-way; keep `git merge-file`), then check-public, setup, smoke-test.
 3. Keep the bash scripts in place until the Python set passes the smoke test on
    Linux AND a real run on Windows. Only then decide whether to delete bash or
    keep both.
