@@ -199,6 +199,104 @@ def cmd_install(args: argparse.Namespace) -> int:
     return 0
 
 
+def _read_sources(fname):
+    """upstream/<fname> rows (skip comments), as lists."""
+    rows = []
+    f = kitlib.kit_root() / "upstream" / fname
+    if f.exists():
+        for line in f.read_text(encoding="utf-8").splitlines():
+            if line and not line.lstrip().startswith("#"):
+                rows.append(line.split("\t"))
+    return rows
+
+
+def cmd_import_skill(args) -> int:
+    import shutil, tempfile
+    root = kitlib.kit_root()
+    src = next((r for r in _read_sources("skill-sources.tsv") if r[0] == args.source), None)
+    if not src:
+        print("unknown source: " + args.source, file=sys.stderr); return 1
+    _, repo, ref, skills_dir, lic = src[0], src[1], src[2], src[3], src[4]
+    local = args.local_name or args.path
+    sha = kitlib.gh_commit_sha(repo, ref)
+    tmp = Path(tempfile.mkdtemp())
+    try:
+        r = kitlib.gh_extract(repo, sha, tmp)
+        srcdir = r / skills_dir / args.path
+        if not (srcdir / "SKILL.md").is_file():
+            print("no SKILL.md at {}/{}".format(skills_dir, args.path), file=sys.stderr); return 1
+        dest = root / "skills" / local
+        if dest.exists():
+            shutil.rmtree(dest)
+        shutil.copytree(srcdir, dest)
+        licf = r / lic
+        if licf.is_file():
+            shutil.copy(licf, root / "upstream" / "licenses" / (args.source + ".LICENSE"))
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    _upsert_selected("skill-selected.tsv", args.source, args.path, local, sha, key_cols=2)
+    print("imported {}/{} -> skills/{} @ {}".format(args.source, args.path, local, sha[:9]))
+    return 0
+
+
+def cmd_import_rule(args) -> int:
+    import shutil, tempfile
+    root = kitlib.kit_root()
+    src = next((r for r in _read_sources("rule-sources.tsv") if r[0] == args.source), None)
+    if not src:
+        print("unknown rule source: " + args.source, file=sys.stderr); return 1
+    _, repo, ref, lic = src[0], src[1], src[2], src[3]
+    load = args.kit_load
+    sha = kitlib.gh_commit_sha(repo, ref)
+    tmp = Path(tempfile.mkdtemp())
+    try:
+        r = kitlib.gh_extract(repo, sha, tmp)
+        up = r / args.file
+        if not up.is_file():
+            print("no file at " + args.file, file=sys.stderr); return 1
+        fm, body = kitlib.split_frontmatter(up.read_text(encoding="utf-8"))
+        desc = fm.get("description", "")
+        out = ["---", "kit_load: " + load, "kit_targets: all",
+               "title: " + args.local_name]
+        if desc:
+            out.append("description: " + desc)
+        out.append("kit_source: {}:{}".format(args.source, args.file))
+        out.append("---")
+        text = "\n".join(out) + "\n\n" + body.rstrip("\n") + "\n"
+        (root / "rules" / (args.local_name + ".md")).write_text(text, encoding="utf-8")
+        licf = r / lic
+        if licf.is_file():
+            shutil.copy(licf, root / "upstream" / "licenses" / (args.source + ".LICENSE"))
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    _upsert_selected("rule-selected.tsv", args.source, args.file, args.local_name, sha,
+                     key_cols=2, extra=load)
+    print("imported rule {}/{} -> rules/{}.md ({}) @ {}"
+          .format(args.source, args.file, args.local_name, load, sha[:9]))
+    print("NOTE: review rules/{}.md — upstream text may name tools (subagents, "
+          "/commands) needing a rewrite.".format(args.local_name))
+    return 0
+
+
+def _upsert_selected(fname, source, path, local, sha, key_cols, extra=None):
+    """Replace any row matching (source, path) in upstream/<fname>, then append.
+    key_cols=2 means the first two columns identify the row. extra (rule load)
+    is inserted before sha when given, matching rule-selected.tsv's columns."""
+    f = kitlib.kit_root() / "upstream" / fname
+    lines = f.read_text(encoding="utf-8").splitlines() if f.exists() else []
+    kept = []
+    for ln in lines:
+        c = ln.split("\t")
+        if not ln.lstrip().startswith("#") and len(c) >= 2 and c[0] == source and c[1] == path:
+            continue  # drop old row for this item
+        kept.append(ln)
+    if extra is not None:
+        kept.append("\t".join([source, path, local, extra, sha]))
+    else:
+        kept.append("\t".join([source, path, local, sha]))
+    f.write_text("\n".join(kept) + "\n", encoding="utf-8")
+
+
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(prog="kit.py", description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -211,6 +309,17 @@ def main(argv=None) -> int:
                     help="run just one installer (repeatable)")
     pi.add_argument("--copy", action="store_true", help="force copy instead of symlink")
     pi.set_defaults(func=cmd_install)
+
+    ps = sub.add_parser("import-skill", help="import one upstream skill")
+    ps.add_argument("source"); ps.add_argument("path")
+    ps.add_argument("local_name", nargs="?", default=None)
+    ps.set_defaults(func=cmd_import_skill)
+
+    pr = sub.add_parser("import-rule", help="import one upstream file as a rule")
+    pr.add_argument("source"); pr.add_argument("file"); pr.add_argument("local_name")
+    pr.add_argument("kit_load", nargs="?", default="always",
+                    choices=["always", "glob", "manual", "model"])
+    pr.set_defaults(func=cmd_import_rule)
 
     args = p.parse_args(argv)
     if not getattr(args, "cmd", None):

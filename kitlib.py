@@ -227,3 +227,34 @@ def merge_mcp_toml(dest: Path, prefix: str, name: str, server: dict):
     data = _load_toml(dest)
     data.setdefault(prefix, {})[name] = server
     _dump_toml(dest, data)
+
+
+# ---- GitHub access (anonymous; replaces gh + tar) ---------------------------
+_GH = "https://api.github.com"
+
+
+def _gh_get(url: str, accept="application/vnd.github+json"):
+    import urllib.request
+    req = urllib.request.Request(url, headers={"Accept": accept, "User-Agent": "agent_skill_kit"})
+    return urllib.request.urlopen(req, timeout=30)
+
+
+def gh_commit_sha(repo: str, ref: str) -> str:
+    """Full commit sha of ref on repo (anonymous API)."""
+    import json
+    return json.load(_gh_get("{}/repos/{}/commits/{}".format(_GH, repo, ref)))["sha"]
+
+
+def gh_extract(repo: str, sha: str, dest_dir: Path) -> Path:
+    """Download repo@sha tarball and extract into dest_dir. Returns the extracted
+    root (the single top-level dir GitHub wraps everything in)."""
+    import io, tarfile
+    # tarball endpoint 302-redirects to codeload; a github media Accept triggers
+    # 415, so send a neutral Accept and let urllib follow the redirect.
+    data = _gh_get("{}/repos/{}/tarball/{}".format(_GH, repo, sha),
+                   accept="*/*").read()
+    tf = tarfile.open(fileobj=io.BytesIO(data), mode="r:gz")
+    tf.extractall(dest_dir)
+    tf.close()
+    roots = [p for p in dest_dir.iterdir() if p.is_dir()]
+    return roots[0]  # GitHub wraps in one <owner>-<repo>-<sha> dir
