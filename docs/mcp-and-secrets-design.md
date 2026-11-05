@@ -114,3 +114,7 @@ enter the kit, which is what makes "publish the repo" safe to reason about.
 - Should `tools.tsv` gain mcp_global / mcp_project / mcp_format columns, or does
   MCP get its own table? (Leaning: own table, because format is JSON-vs-TOML and
   the merge key differs — more than a path.)
+- Naming pass deferred: once the MCP table shape is decided, review all config/
+  and upstream/ file names together for consistency (sources/selected use a
+  hyphen; tools.tsv is singular). `tools.tsv` stays as-is until then; do not
+  rename it in isolation.
