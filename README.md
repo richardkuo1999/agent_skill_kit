@@ -113,6 +113,10 @@ rule 現在和 skill 一樣可追蹤上游。`check-updates.sh` 會印 `##### SK
 
 rule 沒有「掃 repo 找新 rule」這一步，因為任何 `.md` 都可能是 rule，由你指定哪個上游檔要變成 rule。
 
+### 工具路徑（各家官方可能改）
+
+各工具的安裝路徑（skill/rule 在 `config/tools.tsv`、MCP 在 `config/mcp-targets.tsv`）來自官方文件，官方可能改。對 agent 說「檢查工具路徑」會觸發 `tools-sync` skill：它讀每個工具的 `doc_url`、對照表裡現有路徑、有變就跟你討論，你同意才改那一格。讀不到或 JS 頁會標 UNVERIFIED，不亂猜。
+
 重裝只覆蓋 kit 產生的檔案（第一行有產生標記）。手寫的同名 rule 會被略過不覆寫。
 
 ## 公開與 push

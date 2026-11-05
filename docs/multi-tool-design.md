@@ -205,7 +205,13 @@ which is fragile and a wrong path is worse than a stale one. But under the
 execution model above, the agent reads the docs and judges, so this is a skill,
 not a scraper.
 
-### `tools-sync` skill (planned)
+### `tools-sync` skill (IMPLEMENTED — skills/tools-sync/SKILL.md)
+
+Reads the `doc_url` column of both config/tools.tsv and config/mcp-targets.tsv
+(a doc_url column was added to mcp-targets.tsv for this), fetches each vendor
+page, compares documented paths with the tables, and edits one cell per
+confirmed change after the user approves. Unreachable or JS-only pages are
+reported UNVERIFIED, never guessed.
 
 Symmetric with `upstream-sync`, but for the install-target table:
 

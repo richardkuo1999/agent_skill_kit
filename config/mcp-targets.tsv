@@ -6,9 +6,10 @@
 #   mcp_project  project MCP config file ('-' if none)
 #   fmt          json | toml
 #   container    where servers live: json key path, or toml table prefix
+#   doc_url      official MCP doc page, entry point for the tools-sync skill
 # ~ expands to $HOME. --workspace DIR overrides the project base.
-kiro	~/.kiro/settings/mcp.json	.kiro/settings/mcp.json	json	mcpServers
-antigravity	~/.gemini/config/mcp_config.json	-	json	mcpServers
-claude	~/.claude.json	.mcp.json	json	mcpServers
-cursor	~/.cursor/mcp.json	.cursor/mcp.json	json	mcpServers
-codex	~/.codex/config.toml	.codex/config.toml	toml	mcp_servers
+kiro	~/.kiro/settings/mcp.json	.kiro/settings/mcp.json	json	mcpServers	https://kiro.dev/docs/mcp/configuration/
+antigravity	~/.gemini/config/mcp_config.json	-	json	mcpServers	https://antigravity.google/docs/mcp
+claude	~/.claude.json	.mcp.json	json	mcpServers	https://platform.claude.com/docs/en/claude-code/mcp
+cursor	~/.cursor/mcp.json	.cursor/mcp.json	json	mcpServers	https://cursor.com/docs/mcp
+codex	~/.codex/config.toml	.codex/config.toml	toml	mcp_servers	https://learn.chatgpt.com/docs/config-file/config-basic
