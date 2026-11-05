@@ -113,8 +113,12 @@ python kit.py check-public
    check-public done — git history + worktree scan via subprocess git; seven
    checks match check-public.sh, exits 0 clean and 1 on a planted sk- token.
    setup done — `kit.py setup` is an alias of `install` (one run does
-   skills+rules+mcp), matching setup.sh's single-entry habit. Next: port the
-   smoke test to test_kit.py (the equivalence gate), then delete bash.
+   skills+rules+mcp), matching setup.sh's single-entry habit.
+   test_kit.py done — pure-Python end-to-end smoke of kit.py install across all
+   seven tools (skills, A/B rules, MCP json+toml, secret substitution,
+   idempotence, project scope, no-leak): 20/20. The Python set now covers every
+   bash entry point. REMAINING before deleting bash: one real Windows run, then
+   remove scripts/*.sh + setup.sh + scripts/lib and point skills/README at kit.py.
 3. Keep the bash scripts in place until the Python set passes the smoke test on
    Linux AND a real run on Windows. Only then decide whether to delete bash or
    keep both.
