@@ -268,3 +268,33 @@ playbook 是 pilot 的內部檔，install 複製 pilot 資料夾時自然帶上�
 
 D7-D9 的共同原則：照 poteto-mode 或沿用現有機制，不發明新東西。路由表抄 poteto-mode 的
 「Playbooks」段；更新機制沿用 B 類 rule 的區塊標記；跨工具中性描述沿用 ⚠ skill 的教訓。
+
+## 實作中發現的開放問題（需使用者拍板）
+
+### O1：install 會把 kit 的「機制 skill」也裝進使用者工具
+
+做第 2 塊（pilot 骨架）時發現：`kit.py install` 用 `skills/*/` 掃**所有** skill 資料夾
+裝到各工具。於是 `setup-wizard`、`upstream-sync`、`tools-sync` 這些「kit 維運用」的 skill
+也會被裝進使用者天天工作的六個工具，污染 skill 清單。這是**既有行為**，不是 pilot 引入的，
+但 D6 把 setup-wizard 定為「只留 kit、不鋪到工具」後，衝突浮現。
+
+要裝的只有 `pilot`（和使用者自己的 skill）。要排除的是 kit 自己的機制 skill。
+
+三個方案（未動程式，等拍板）：
+
+| 方案 | 做法 | 優點 | 缺點 |
+|---|---|---|---|
+| A 命名慣例 | kit 機制 skill 用前綴（如 `_upstream-sync`），install 跳過 `_` 開頭 | 零設定、一眼看出 | 要改三個現有 skill 的資料夾名、README/引用 |
+| B 排除清單 | 在 kit 放一個 `skills/.installignore`，列不裝的 skill | 不改現有名 | 多一個檔、install 要讀它 |
+| C 分目錄 | 機制 skill 移到 `kit-skills/`，使用者內容留 `skills/`，install 只掃 `skills/` | 概念最清楚（機制 vs 內容分開） | 動現有目錄結構、upstream-sync 等路徑引用要改 |
+
+傾向 C：它呼應整個 kit「機制 vs 使用者內容」的分層（見「定位」圖），而且 install 只掃
+`skills/` 最單純。但 C 動到現有結構，影響最大，所以留給你決定。做這題前，pilot 已先
+放在 `skills/`，等方案定了再一起歸位。
+
+### 分支狀態
+
+- `feat/setup-wizard-pilot`（主開發）：方案 A 式 pilot——出廠路由表空，附一個範例 playbook
+  `fix-bug.md` 示範格式。
+- （計畫）`feat/pilot-with-examples`：方案 B 式 pilot——自帶 investigate/fix-bug 等
+  通用 playbook，路由表預填。供明天並排比較。
