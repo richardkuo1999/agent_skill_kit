@@ -1,4 +1,6 @@
 .DS_Store
+__pycache__/
+*.pyc
 
 # Real secret values. NEVER commit. See config/secrets.env.example for the template
 # and docs/mcp-and-secrets-design.md for how ${KIT_SECRET:NAME} references resolve.
