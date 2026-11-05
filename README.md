@@ -1,6 +1,8 @@
 # agent_skill_kit
 
-一份 skill 與 rule 來源，給多個 AI 工具共用（Kiro、KiroCrew、Antigravity、Cursor、Claude Code、Codex）。skill 用共用的 `<name>/SKILL.md`，靠符號連結安裝；rule 安裝時轉成各工具格式。一支跨平台的 `kit.py` 處理全部。
+打造並維護你自己的跨工具 skill/rule/MCP 包。你的 skill、rule、MCP 集中放一處版控，一道指令就裝到多個 AI 工具（Kiro、KiroCrew、Antigravity、Cursor、Claude Code、Codex）；各工具格式不同，安裝時自動轉換。需要時可從上游 repo 引入既有 skill，之後追蹤官方更新並三方合併。
+
+上游同步是輔助：你的 repo 是主角，可以完全自己寫，也可以借用上游再改寫成自己的。
 
 需求：Python 3.11+ 和 git。clone 後跑 `python kit.py install <tool>`。之後 `git pull` 同步 skill，rule 改動要重跑 install。
 
@@ -83,6 +85,25 @@ MCP server 定義放 `config/mcp/<name>.json`（工具無關），install 時轉
 
 工具清單在 `config/tools.tsv`，加新工具就是加一列（見 `docs/multi-tool-design.md`）。路徑特例見上方表格腳註。
 
+## 從上游引入
+
+要從某個 repo 引入 skill，先把它登記成一個來源，`import-skill` 的 `<source>` 就是這個登記名（不是 repo URL）。
+
+1. 在 `upstream/skill-sources.tsv` 加一列（tab 分隔）：
+
+   ```
+   name    repo                ref   skills_dir  license_path
+   myrepo  someone/cool-skills main  skills       LICENSE
+   ```
+
+   `skills_dir` 是 repo 裡放各 skill 資料夾的目錄。範例見 `*.example.tsv`。
+
+2. 查該 repo 的 `skills_dir`，看有哪些含 `SKILL.md` 的資料夾。
+
+3. 引入：`python kit.py import-skill myrepo <skill資料夾名> [本地名]`。它抓下來放進 `skills/`、記下來源與 commit sha，之後才能被 `upstream-sync` 追蹤。
+
+rule 相同：先登記到 `upstream/rule-sources.tsv`（欄位少一個 `skills_dir`，因為 rule 引入時逐檔指定路徑），再 `python kit.py import-rule <source> <file_path> <local_name> [kit_load]`。
+
 ## 更新流程
 
 ### skill（有上游，自動追蹤）
@@ -98,9 +119,7 @@ MCP server 定義放 `config/mcp/<name>.json`（工具無關），install 時轉
 
 rule 可追蹤上游，`check-updates` 同時列出 skill 和 rule 的變更。
 
-來源：
-- 自己寫：在 `rules/` 新增 `.md`（見 `rules/README.md`）。
-- 從 repo 引入：`python kit.py import-rule <source> <file_path> <local_name> [kit_load]`，會套上 kit frontmatter 並記下來源 sha。
+來源：自己寫（在 `rules/` 新增 `.md`，見 `rules/README.md`），或從上游引入（見上方「從上游引入」）。
 
 更新時 `upstream-sync` 一併處理 rule：用 `diff --rule <local_name>` 做 body-only 三方比對，你同意後寫回並更新 sha，再重跑 `install` 重新產生 rule 檔。rule 沒有「掃 repo 找新 rule」這步，由你指定哪個上游檔變成 rule。
 
