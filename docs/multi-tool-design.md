@@ -18,8 +18,8 @@ install by symlink; only the path differs.
 |------|------------------|-------------------|------------|
 | Kiro | `~/.kiro/skills` | `.kiro/skills` | shipped |
 | Antigravity | `~/.gemini/config/skills` | `.agents/skills` | shipped |
-| Claude Code | `~/.claude/skills` | `.claude/skills` | shipped (skill only) |
-| Codex | `~/.codex/skills` | `.agents/skills` | shipped (skill only) |
+| Claude Code | `~/.claude/skills` | `.claude/skills` | shipped |
+| Codex | `~/.codex/skills` | `.agents/skills` | shipped |
 | Cursor | `~/.cursor/skills` | `.cursor/skills` | shipped |
 | Copilot | — | — | no skill concept |
 
@@ -152,7 +152,18 @@ Adding an A-class tool = one `tools.tsv` row + one `fmt_*`. Adding a B-class too
    rows; both are rule_class B, so their rules SKIP until step 4. Codex project
    skills share `.agents/skills` with Antigravity — `setup all --workspace` links
    it twice (idempotent `ln -sfn`, harmless; a dedupe is a possible optimization).
-4. Add B-class rule merge (`merge_single_file`) last; test it in isolation.
+4. Add B-class rule merge (`merge_single_file`) last; test it in isolation. DONE.
+   install-rule.sh branches on rule_class: A keeps the per-file loop; B collects
+   every `always` rule for the tool, wraps each in `## [kit rule] <title>`, and
+   merges the lot into the single file (CLAUDE.md / AGENTS.md) between
+   `<!-- kit:start ... -->` and `<!-- kit:end -->`. glob/manual/model are skipped
+   with a reason. The kit block always sits at the end of the file; a reinstall
+   removes the old block (markers inclusive) with sed, keeps all other text (the
+   user's), and re-appends a fresh block — so user content is never lost, though
+   content that was after the old block moves to before the new one. Verified:
+   fresh file, reinstall (no block growth), hand-written text before and after
+   the block preserved, glob/manual/model and kit_targets filtering, Codex
+   AGENTS.md, and setup all across five tools.
 
 ### Refactor risks
 

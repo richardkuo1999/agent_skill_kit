@@ -44,8 +44,10 @@ agent_skill_kit/
 | rule | Kiro | `~/.kiro/steering/` | `<project>/.kiro/steering/` |
 | rule | Antigravity | `~/.gemini/config/rules/` | `<project>/.agents/rules/` |
 | rule | Cursor | （無檔案式全域） | `<project>/.cursor/rules/*.mdc` |
+| rule | Claude Code | `~/.claude/CLAUDE.md`（合併） | `<project>/CLAUDE.md`（合併） |
+| rule | Codex | `~/.codex/AGENTS.md`（合併） | `<project>/AGENTS.md`（合併） |
 
-工具清單定義在 `config/tools.tsv`，加一個新工具就是加一列（細節見 `docs/multi-tool-design.md`）。Cursor 的全域 rule 走它的 User Rules UI，不是檔案，所以全域 rule 安裝會略過。Claude Code 和 Codex 目前只支援 skill；它們的 rule 是單一檔（CLAUDE.md、AGENTS.md），合併安裝待後續步驟，現在會略過。
+工具清單定義在 `config/tools.tsv`，加一個新工具就是加一列（細節見 `docs/multi-tool-design.md`）。Cursor 的全域 rule 走它的 User Rules UI，不是檔案，所以全域 rule 安裝會略過。Claude Code 和 Codex 的 rule 是單一檔（CLAUDE.md、AGENTS.md）。kit 只把 `kit_load: always` 的 rule 合併進去（glob/manual/model 會略過，因為單一檔無法選擇性載入）。kit 只管檔案裡 `<!-- kit:start -->` 到 `<!-- kit:end -->` 之間，你自己手寫的其餘內容會保留，重裝只更新 kit 區塊。
 
 一個入口 `setup.sh` 一次處理 skill、rule 和之後加入的東西：
 
