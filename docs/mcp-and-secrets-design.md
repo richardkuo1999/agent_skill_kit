@@ -100,8 +100,14 @@ enter the kit, which is what makes "publish the repo" safe to reason about.
 
 ## Open decisions
 
-- Is `jq` (and a TOML writer) available on the target machines? If not, step 5
-  waits.
+- Is `jq` (and a TOML writer) available on the target machines? RESOLVED on the
+  build server: jq 1.5 (JSON) and the Python `toml` 0.10.2 package (TOML, pinned
+  in requirements.txt) are present; Python 3.6.9 has no stdlib tomllib, hence the
+  third-party package. Caveat: jq 1.5 is old — install-mcp.sh must avoid 1.6+
+  syntax. The `toml` package is NOT guaranteed on the user's OTHER machines (e.g.
+  the home Antigravity box); Codex MCP install must detect `python3 -c 'import
+  toml'` and fail loudly asking for `pip install -r requirements.txt` rather than
+  hand-building TOML with sed.
 - Antigravity global MCP path variant (`config/` vs `antigravity/`) — verify live.
 - Whether MCP server definitions themselves (not just their secrets) are
   per-machine enough that some belong only in a gitignored overlay, not the repo.
