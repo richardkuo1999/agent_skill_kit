@@ -96,8 +96,14 @@ merge_single_file() {
   elif [ -f "$dest" ]; then
     cat "$dest" > "$kept"
   fi
-  { cat "$kept"
-    [ -s "$kept" ] && echo
+  # strip trailing blank lines from kept (so repeated reinstalls don't accumulate
+  # blank lines), then add exactly one blank line before the block.
+  if [ -n "$(tr -d '[:space:]' < "$kept" 2>/dev/null)" ]; then
+    sed -e :a -e '/^\n*$/{$d;N;ba}' "$kept" > "$tmp.k"; mv "$tmp.k" "$kept"
+  else
+    : > "$kept"
+  fi
+  { if [ -s "$kept" ]; then cat "$kept"; echo; fi
     echo "$KIT_BLOCK_START"
     cat "$blockf"
     echo "$KIT_BLOCK_END"

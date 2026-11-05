@@ -38,6 +38,72 @@ def _link_or_copy(src: Path, dest: Path, force_copy: bool) -> str:
     return "copy"
 
 
+def _targets_tool(tgts: str, tool: str) -> bool:
+    parts = [p.strip() for p in tgts.split(",")]
+    return "all" in parts or tool in parts
+
+
+def _install_rules(t, row, args, root, marker_line):
+    # columns: name sg sp rule_class rule_global rule_project rule_fmt rule_ext doc_url
+    rule_class = row[3]
+    scope = row[5] if args.workspace else row[4]
+    if scope == "-":
+        print("SKIP {}: no rule support".format(t))
+        return
+    rule_srcs = sorted((root / "rules").glob("*.md"))
+    rule_srcs = [s for s in rule_srcs if s.name != "README.md"]
+
+    if rule_class == "A":
+        fmt = kitlib.FMT[row[6]]
+        ext = row[7] or "md"
+        dest_dir = (Path(args.workspace) / scope) if args.workspace else kitlib.expand(scope)
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        for src in rule_srcs:
+            name = src.stem
+            fm, body = kitlib.split_frontmatter(src.read_text(encoding="utf-8"))
+            load = fm.get("kit_load", "always")
+            tgts = fm.get("kit_targets", "all")
+            if not _targets_tool(tgts, t):
+                print("SKIP {}: {} (kit_targets={})".format(t, name, tgts)); continue
+            title = fm.get("title", name)
+            out = dest_dir / (name + "." + ext)
+            if out.exists() and kitlib.KIT_MARKER not in out.read_text(encoding="utf-8"):
+                print("SKIP {}: {} (hand-written, not overwriting)".format(t, name)); continue
+            text, warn = fmt(marker_line, title, load, fm.get("description", ""),
+                             fm.get("globs", ""), body)
+            if warn:
+                print("WARN {}: Kiro has no model_decision; installed as manual".format(warn),
+                      file=sys.stderr)
+            out.write_text(text, encoding="utf-8")
+            print("OK   {}: {} ({})".format(t, name, load))
+
+    elif rule_class == "B":
+        dest = (Path(args.workspace) / scope) if args.workspace else kitlib.expand(scope)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        block_parts = []
+        any_rule = 0
+        for src in rule_srcs:
+            name = src.stem
+            fm, body = kitlib.split_frontmatter(src.read_text(encoding="utf-8"))
+            load = fm.get("kit_load", "always")
+            tgts = fm.get("kit_targets", "all")
+            if not _targets_tool(tgts, t):
+                print("SKIP {}: {} (kit_targets={})".format(t, name, tgts)); continue
+            if load != "always":
+                print("SKIP {}: {} (kit_load={}; single-file {} takes always only)"
+                      .format(t, name, load, dest.name)); continue
+            title = fm.get("title", name)
+            block_parts.append("## [kit rule] {}\n\n{}\n".format(title, body.rstrip("\n")))
+            any_rule += 1
+            print("OK   {}: {} (merged)".format(t, name))
+        if any_rule:
+            kitlib.merge_single_file(dest, "\n".join(block_parts) + "\n")
+        else:
+            print("SKIP {}: no always-rules for this tool; {} untouched".format(t, dest.name))
+    else:
+        print("SKIP {}: unknown rule_class={}".format(t, rule_class))
+
+
 def cmd_install(args: argparse.Namespace) -> int:
     tools = kitlib.tools_table()
     try:
@@ -50,8 +116,10 @@ def cmd_install(args: argparse.Namespace) -> int:
 
     only = set(args.only or [])
     want_skills = (not only) or ("skills" in only)
+    want_rules = (not only) or ("rules" in only)
     root = kitlib.kit_root()
     copied_any = False
+    marker_line = "# " + kitlib.KIT_MARKER
 
     for t in dict.fromkeys(targets):  # de-dup, keep order
         row = tools[t]
@@ -76,7 +144,9 @@ def cmd_install(args: argparse.Namespace) -> int:
                         if mode == "copy":
                             copied_any = True
                         print(f"OK   {t}: {name} ({mode})")
-        # rule / mcp install: ported in a later batch (bash still handles those)
+        if want_rules:
+            _install_rules(t, row, args, root, marker_line)
+        # mcp install: ported in a later batch (bash still handles it)
 
     if copied_any:
         print("note: some skills were COPIED (no symlink privilege); "

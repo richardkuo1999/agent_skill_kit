@@ -89,7 +89,13 @@ python kit.py check-public
    links across 6 tools), --copy and --workspace verified, unknown tool exits 1.
    Written 3.11-targeted but kept runnable on this host's 3.6 so the diff works
    (no `from __future__ annotations`, no PEP 585 generics, no required=True
-   subparsers). Next: install rules, then install mcp.
+   subparsers).
+   install RULES done too — A-class (fmt_kiro/antigravity/cursor) and B-class
+   single-file merge all byte-match install-rule.sh across the five tools, incl.
+   hand-written protection and reinstall idempotence. Found and fixed a latent
+   bug in BOTH versions while porting: merge_single_file accumulated a blank line
+   on every reinstall; trailing blank lines in the kept (user) text are now
+   normalized to one. Next: install mcp.
 3. Keep the bash scripts in place until the Python set passes the smoke test on
    Linux AND a real run on Windows. Only then decide whether to delete bash or
    keep both.
