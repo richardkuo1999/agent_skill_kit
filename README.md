@@ -125,6 +125,10 @@ rule 沒有「掃 repo 找新 rule」這一步，因為任何 `.md` 都可能是
 
 **每次 push 前都要跑 `scripts/check-public.sh`**，不只第一次。因為之後引入的上游 rule 或新增的 MCP server 可能夾帶密鑰。腳本是唯讀的，檢查八項（secrets.env 未進歷史、無 token 樣式字串、無嵌入密鑰、作者 email 等），有 FAIL 就會 exit 非零並顯示「DO NOT PUSH」。全 PASS 才推。
 
+## 測試
+
+`scripts/smoke-test.sh` 在拋棄式沙盒裡跑完整安裝流程（五工具 × skill/rule/MCP），用假內容斷言每個工具的產出正確、測冪等、測專案模式，最後清掉。改過任何腳本後跑一次，確認全流程沒壞。需要 `jq`（Codex 的 TOML 檢查另需 python `toml`）。
+
 ## 限制
 
 - `check-updates.sh`、`import-skill.sh`、`import-rule.sh`、`diff-upstream.sh` 需要 `gh` 已登入。
