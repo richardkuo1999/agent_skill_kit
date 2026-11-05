@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Copy one selected upstream skill into skills/<local_name>/ and record the
 # upstream sha it came from. Run only after the user approved it.
-# Usage: import.sh <source> <upstream_path> [local_name]
+# Usage: import-skill.sh <source> <upstream_path> [local_name]
 set -euo pipefail
 cd "$(dirname "$0")/.."
 src=$1; path=$2; local_name=${3:-$2}
-IFS=$'\t' read -r _ repo ref dir lic < <(awk -F'\t' -v s="$src" '$1==s' upstream/sources.tsv)
+IFS=$'\t' read -r _ repo ref dir lic < <(awk -F'\t' -v s="$src" '$1==s' upstream/skill-sources.tsv)
 [ -n "${repo:-}" ] || { echo "unknown source: $src" >&2; exit 1; }
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
 # tarball of an exact sha (git on the build server is too old for sparse clone)
@@ -16,7 +16,7 @@ tar -xzf "$tmp/t.tgz" -C "$tmp/r" --strip-components=1
 rm -rf "skills/$local_name"; cp -r "$tmp/r/$dir/$path" "skills/$local_name"
 [ -f "$tmp/r/$lic" ] && cp "$tmp/r/$lic" "upstream/licenses/$src.LICENSE"
 # replace any previous row for this skill, then append the new one
-grep -vP "^$src\t$path\t" upstream/selected.tsv > "$tmp/sel" || true
+grep -vP "^$src\t$path\t" upstream/skill-selected.tsv > "$tmp/sel" || true
 printf '%s\t%s\t%s\t%s\n' "$src" "$path" "$local_name" "$sha" >> "$tmp/sel"
-cp "$tmp/sel" upstream/selected.tsv
+cp "$tmp/sel" upstream/skill-selected.tsv
 echo "imported $src/$path -> skills/$local_name @ ${sha:0:9}"
