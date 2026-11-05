@@ -18,8 +18,8 @@ install by symlink; only the path differs.
 |------|------------------|-------------------|------------|
 | Kiro | `~/.kiro/skills` | `.kiro/skills` | shipped |
 | Antigravity | `~/.gemini/config/skills` | `.agents/skills` | shipped |
-| Claude Code | `~/.claude/skills` | `.claude/skills` | high |
-| Codex | `~/.codex/skills` | `.agents/skills` | high |
+| Claude Code | `~/.claude/skills` | `.claude/skills` | shipped (skill only) |
+| Codex | `~/.codex/skills` | `.agents/skills` | shipped (skill only) |
 | Cursor | `~/.cursor/skills` | `.cursor/skills` | shipped |
 | Copilot | — | — | no skill concept |
 
@@ -148,7 +148,10 @@ Adding an A-class tool = one `tools.tsv` row + one `fmt_*`. Adding a B-class too
    frontmatter), and `install_dir` now checks the scope actually in use (Cursor
    has project rules but no file-based global rules). A `rule_ext` column lets
    Cursor write .mdc while others write .md.
-3. Add Claude Code and Codex skills (symlink, nearly free).
+3. Add Claude Code and Codex skills (symlink, nearly free). DONE. Two tools.tsv
+   rows; both are rule_class B, so their rules SKIP until step 4. Codex project
+   skills share `.agents/skills` with Antigravity — `setup all --workspace` links
+   it twice (idempotent `ln -sfn`, harmless; a dedupe is a possible optimization).
 4. Add B-class rule merge (`merge_single_file`) last; test it in isolation.
 
 ### Refactor risks

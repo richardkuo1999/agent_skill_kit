@@ -13,3 +13,5 @@
 kiro	~/.kiro/skills	.kiro/skills	A	~/.kiro/steering	.kiro/steering	fmt_kiro	md	https://kiro.dev/docs/steering/
 antigravity	~/.gemini/config/skills	.agents/skills	A	~/.gemini/config/rules	.agents/rules	fmt_antigravity	md	https://antigravity.google/docs/rules
 cursor	~/.cursor/skills	.cursor/skills	A	-	.cursor/rules	fmt_cursor	mdc	https://cursor.com/docs/context/rules
+claude	~/.claude/skills	.claude/skills	B	~/.claude/CLAUDE.md	CLAUDE.md	-	md	https://platform.claude.com/docs/en/docs/claude-code/skills
+codex	~/.codex/skills	.agents/skills	B	~/.codex/AGENTS.md	AGENTS.md	-	md	https://developers.openai.com/codex/guides/agents-md

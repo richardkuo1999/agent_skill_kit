@@ -39,11 +39,13 @@ agent_skill_kit/
 | skill | Kiro | `~/.kiro/skills/` | `<project>/.kiro/skills/` |
 | skill | Antigravity | `~/.gemini/config/skills/` | `<project>/.agents/skills/` |
 | skill | Cursor | `~/.cursor/skills/` | `<project>/.cursor/skills/` |
+| skill | Claude Code | `~/.claude/skills/` | `<project>/.claude/skills/` |
+| skill | Codex | `~/.codex/skills/` | `<project>/.agents/skills/` |
 | rule | Kiro | `~/.kiro/steering/` | `<project>/.kiro/steering/` |
 | rule | Antigravity | `~/.gemini/config/rules/` | `<project>/.agents/rules/` |
 | rule | Cursor | （無檔案式全域） | `<project>/.cursor/rules/*.mdc` |
 
-工具清單定義在 `config/tools.tsv`，加一個新工具就是加一列（細節見 `docs/multi-tool-design.md`）。Cursor 的全域 rule 走它的 User Rules UI，不是檔案，所以全域 rule 安裝會略過。
+工具清單定義在 `config/tools.tsv`，加一個新工具就是加一列（細節見 `docs/multi-tool-design.md`）。Cursor 的全域 rule 走它的 User Rules UI，不是檔案，所以全域 rule 安裝會略過。Claude Code 和 Codex 目前只支援 skill；它們的 rule 是單一檔（CLAUDE.md、AGENTS.md），合併安裝待後續步驟，現在會略過。
 
 一個入口 `setup.sh` 一次處理 skill、rule 和之後加入的東西：
 
