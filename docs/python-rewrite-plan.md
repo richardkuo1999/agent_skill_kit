@@ -20,7 +20,7 @@ just **Python + git**.
 |----------------|-------|---------------|-----------------------|
 | install-skill.sh | 27 | install.py (skill) | — (symlink→copy fallback on Windows) |
 | install-rule.sh | 76 | install.py (rule) | — |
-| install-mcp.sh | 93 | install.py (mcp) | jq, python-toml (use stdlib json; tomllib/tomli) |
+| install-mcp.sh | 93 | install.py (mcp) | jq (use stdlib json + tomllib read; toml write pkg) |
 | lib/tools.sh | — | kitlib.py | jq |
 | import-skill.sh | 22 | kit.py import-skill | gh, tar (use urllib + tarfile) |
 | import-rule.sh | 40 | kit.py import-rule | gh, tar |
@@ -74,8 +74,9 @@ python kit.py check-public
 
 ## Minimum Python version
 
-- `tomllib` is 3.11+. If colleagues may have < 3.11, bundle a `tomli` fallback
-  for reading too. Pin decisions in requirements.txt. State the floor in README.
+- Floor is **3.11**, so `tomllib` (stdlib) reads TOML with no fallback. TOML
+  write still needs a package (`tomli_w` or `toml`) in requirements.txt. State
+  the 3.11 floor in README.
 
 ## Migration strategy (the part that protects correctness)
 
@@ -94,10 +95,11 @@ python kit.py check-public
   point, git-style (`python kit.py install kiro`, `... import-skill ...`,
   `... check-updates`, `... check-public`). Easiest for Windows colleagues.
 - **Per-OS paths: not needed** — pathlib resolves `~` per OS (see above).
-- **Minimum Python 3.8.** TOML read uses stdlib `tomllib` on 3.11+, else a
-  bundled/declared `tomli` fallback; TOML write uses `tomli_w`/`toml`. 3.8 is a
-  safe corporate floor; do not require 3.11. (This repo's own machine is 3.6 —
-  use the bash version there; Python targets colleagues, not this host.)
+- **Minimum Python 3.11.** TOML read uses stdlib `tomllib` (3.11+), so no `tomli`
+  fallback is needed — simpler. TOML write still needs a package (`tomli_w` or
+  `toml`), declared in requirements.txt. README must state the 3.11 floor.
+  (This repo's own machine is 3.6 — use the bash version there; Python targets
+  colleagues, not this host.)
 - **Colleagues self-serve**: they need install AND import/check-updates/diff, so
   the whole script layer is ported, not just install.
 - **Delete bash after Python lands** (no long-term coexistence — avoids drift).
