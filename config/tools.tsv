@@ -11,6 +11,7 @@
 #   doc_url       official doc page, entry point for the tools-sync skill
 # ~ expands to $HOME. --workspace DIR overrides the *_project paths' base.
 kiro	~/.kiro/skills	.kiro/skills	A	~/.kiro/steering	.kiro/steering	fmt_kiro	md	https://kiro.dev/docs/steering/
+kirocrew	~/.kiro/crew/skills	-	A	-	-	fmt_kiro	md	https://kiro.dev/docs/steering/
 antigravity	~/.gemini/config/skills	.agents/skills	A	~/.gemini/config/rules	.agents/rules	fmt_antigravity	md	https://antigravity.google/docs/rules
 cursor	~/.cursor/skills	.cursor/skills	A	-	.cursor/rules	fmt_cursor	mdc	https://cursor.com/docs/rules
 claude	~/.claude/skills	.claude/skills	B	~/.claude/CLAUDE.md	CLAUDE.md	-	md	https://platform.claude.com/docs/en/claude-code/memory

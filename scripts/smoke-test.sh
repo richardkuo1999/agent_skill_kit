@@ -33,6 +33,7 @@ has "antigravity skill" "$home/.gemini/config/skills/smoke-skill"
 has "cursor skill"      "$home/.cursor/skills/smoke-skill"
 has "claude skill"      "$home/.claude/skills/smoke-skill"
 has "codex skill"       "$home/.codex/skills/smoke-skill"
+has "kirocrew skill"    "$home/.kiro/crew/skills/smoke-skill"
 
 # --- rules: A-class tools got the always-rule, with correct frontmatter ---
 grep_ok "kiro rule inclusion"      "inclusion: always"  "$home/.kiro/steering/smoke-always.md"

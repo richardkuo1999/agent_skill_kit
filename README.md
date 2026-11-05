@@ -45,6 +45,7 @@ agent_skill_kit/
 | | 工具 | 全域 | 專案 |
 |---|---|---|---|
 | skill | Kiro | `~/.kiro/skills/` | `<project>/.kiro/skills/` |
+| skill | KiroCrew | `~/.kiro/crew/skills/` | （無專案層級） |
 | skill | Antigravity | `~/.gemini/config/skills/` | `<project>/.agents/skills/` |
 | skill | Cursor | `~/.cursor/skills/` | `<project>/.cursor/skills/` |
 | skill | Claude Code | `~/.claude/skills/` | `<project>/.claude/skills/` |
@@ -62,7 +63,7 @@ agent_skill_kit/
 
 MCP server 定義放 `config/mcp/<name>.json`（工具無關）。`install-mcp.sh` 轉成各工具格式（JSON 用 jq、Codex 的 TOML 用 python toml），合併進既有設定檔並保留你其餘的 server 與設定。密鑰用 `${KIT_SECRET:NAME}` 引用，真值放 gitignored 的 `config/secrets.env`（範本是 `config/secrets.env.example`），安裝時代入；缺 key 會報錯中止，不寫出壞設定。這讓整個 repo 可以安全公開。
 
-工具清單定義在 `config/tools.tsv`，加一個新工具就是加一列（細節見 `docs/multi-tool-design.md`）。Cursor 的全域 rule 走它的 User Rules UI，不是檔案，所以全域 rule 安裝會略過。Claude Code 和 Codex 的 rule 是單一檔（CLAUDE.md、AGENTS.md）。kit 只把 `kit_load: always` 的 rule 合併進去（glob/manual/model 會略過，因為單一檔無法選擇性載入）。kit 只管檔案裡 `<!-- kit:start -->` 到 `<!-- kit:end -->` 之間，你自己手寫的其餘內容會保留，重裝只更新 kit 區塊。
+工具清單定義在 `config/tools.tsv`，加一個新工具就是加一列（細節見 `docs/multi-tool-design.md`）。KiroCrew 的 skill 裝到 `~/.kiro/crew/skills/`（和 Kiro IDE 的 `~/.kiro/skills/` 不同目錄）；它的 rule 共用 Kiro 的 `~/.kiro/steering/`，所以 kirocrew 列不另裝 rule，裝 kiro 就涵蓋。Cursor 的全域 rule 走它的 User Rules UI，不是檔案，所以全域 rule 安裝會略過。Claude Code 和 Codex 的 rule 是單一檔（CLAUDE.md、AGENTS.md）。kit 只把 `kit_load: always` 的 rule 合併進去（glob/manual/model 會略過，因為單一檔無法選擇性載入）。kit 只管檔案裡 `<!-- kit:start -->` 到 `<!-- kit:end -->` 之間，你自己手寫的其餘內容會保留，重裝只更新 kit 區塊。
 
 一個入口 `setup.sh` 一次處理 skill、rule 和之後加入的東西：
 

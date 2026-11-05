@@ -17,6 +17,7 @@ install by symlink; only the path differs.
 | tool | global skill dir | project skill dir | confidence |
 |------|------------------|-------------------|------------|
 | Kiro | `~/.kiro/skills` | `.kiro/skills` | shipped |
+| KiroCrew | `~/.kiro/crew/skills` | (none) | shipped (skill only; rules share Kiro's ~/.kiro/steering) |
 | Antigravity | `~/.gemini/config/skills` | `.agents/skills` | shipped |
 | Claude Code | `~/.claude/skills` | `.claude/skills` | shipped |
 | Codex | `~/.codex/skills` | `.agents/skills` | shipped |
