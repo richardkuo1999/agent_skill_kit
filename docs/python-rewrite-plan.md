@@ -88,14 +88,24 @@ python kit.py check-public
    keep both.
 4. Port smoke-test.sh to test_kit.py last; it is the equivalence gate.
 
-## Open decisions (for your review)
+## Decisions (settled)
 
-- One `kit.py` with subcommands, or several small scripts mirroring today's
-  files? (Leaning: one file — easiest to ship and run on Windows.)
-- Per-OS paths: RESOLVED — not needed (pathlib handles `~`; see above).
-- Minimum Python version to support (drives the TOML-read fallback).
-- Delete bash after Python lands, or keep both? (Keeping both doubles
-  maintenance; deleting loses the Linux-proven baseline.)
-- Do colleagues actually need import/check-updates (self-serve), or only install?
-  This was assumed yes; confirm, because "only install" roughly halves the work.
+- **One `kit.py` with subcommands** + `kitlib.py` for shared logic. Single entry
+  point, git-style (`python kit.py install kiro`, `... import-skill ...`,
+  `... check-updates`, `... check-public`). Easiest for Windows colleagues.
+- **Per-OS paths: not needed** — pathlib resolves `~` per OS (see above).
+- **Minimum Python 3.8.** TOML read uses stdlib `tomllib` on 3.11+, else a
+  bundled/declared `tomli` fallback; TOML write uses `tomli_w`/`toml`. 3.8 is a
+  safe corporate floor; do not require 3.11. (This repo's own machine is 3.6 —
+  use the bash version there; Python targets colleagues, not this host.)
+- **Colleagues self-serve**: they need install AND import/check-updates/diff, so
+  the whole script layer is ported, not just install.
+- **Delete bash after Python lands** (no long-term coexistence — avoids drift).
+  Deletion is the LAST step, only after the Python set passes the Linux smoke
+  test and at least one real Windows run. Until then bash stays as the safety net.
+
+## Still to verify on a live Windows install (not blocking the port)
+
+- Antigravity Windows MCP path (`config\` vs `antigravity\`).
+- Cursor `~/.cursor/skills` global skill dir (inferred, medium confidence).
 ```
