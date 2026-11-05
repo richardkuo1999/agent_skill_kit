@@ -1,0 +1,11 @@
+# EXAMPLE ONLY — not read by any script. Shows the format of skill-selected.tsv.
+# import-skill.sh writes one row here per imported skill.
+# Columns: source	upstream_path (relative to skills_dir)	local_name	imported_sha
+# source       = a name from skill-sources.tsv
+# upstream_path = the skill's folder under skills_dir (the part before /SKILL.md)
+# local_name   = folder name under skills/ (use mp-/ps- prefixes to avoid clashes)
+# imported_sha = full commit sha the copy was taken from (drives update checks)
+mattpocock	engineering/tdd	mp-tdd	4ae2317ddb22b046e26455e4f9c9b3aaaf62212d
+mattpocock	engineering/code-review	code-review	4ae2317ddb22b046e26455e4f9c9b3aaaf62212d
+pstack	tdd	ps-tdd	bb68f2365eceafa0cb2d253112f675acf5f144cc
+pstack	how	how	bb68f2365eceafa0cb2d253112f675acf5f144cc

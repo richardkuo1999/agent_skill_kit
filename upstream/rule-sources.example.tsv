@@ -1,0 +1,7 @@
+# EXAMPLE ONLY — not read by any script. Shows the format of rule-sources.tsv.
+# Columns: name	repo	ref	license_path
+# Rules have no single dir: each imported rule names its own upstream file path
+# (see rule-selected.tsv), because rules live in varied places.
+mattpocock	mattpocock/skills	main	LICENSE
+pstack	cursor/plugins	main	pstack/LICENSE
+house-rules	someone/team-agent-rules	main	LICENSE

@@ -1,0 +1,10 @@
+# EXAMPLE ONLY — not read by any script. Shows the format of skill-sources.tsv.
+# Columns: name	repo	ref	skills_dir	license_path
+# name         = short id you use in import-skill.sh and the selected/reviewed files
+# repo         = owner/repo on GitHub
+# ref          = branch or tag to track
+# skills_dir   = path under the repo that holds <skill>/SKILL.md folders
+# license_path = path to the repo's license file, copied into upstream/licenses/
+mattpocock	mattpocock/skills	main	skills	LICENSE
+pstack	cursor/plugins	main	pstack/skills	pstack/LICENSE
+awesome-co	someone/awesome-agent-skills	v2.1	packages/skills	LICENSE.md

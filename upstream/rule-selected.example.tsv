@@ -1,0 +1,11 @@
+# EXAMPLE ONLY — not read by any script. Shows the format of rule-selected.tsv.
+# import-rule.sh writes one row here per imported rule.
+# Columns: source	upstream_file_path	local_name	kit_load	imported_sha
+# source            = a name from rule-sources.tsv
+# upstream_file_path = exact file path in the repo (a SKILL.md, an AGENTS.md, ...)
+# local_name        = file name under rules/ (becomes rules/<local_name>.md)
+# kit_load          = always | glob | manual | model  (how the rule activates)
+# imported_sha      = full commit sha the copy was taken from (drives update checks)
+pstack	pstack/skills/principle-laziness-protocol/SKILL.md	laziness-protocol	model	bb68f2365eceafa0cb2d253112f675acf5f144cc
+pstack	pstack/skills/principle-fix-root-causes/SKILL.md	fix-root-causes	model	bb68f2365eceafa0cb2d253112f675acf5f144cc
+mattpocock	AGENTS.md	mattpocock-agents	always	4ae2317ddb22b046e26455e4f9c9b3aaaf62212d
