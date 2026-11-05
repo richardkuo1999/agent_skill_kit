@@ -22,6 +22,7 @@ here=$(cd "$(dirname "$0")" && pwd)
 installers=(
   "skills scripts/install-skill.sh skills/*/"
   "rules  scripts/install-rule.sh  rules/*.md"
+  "mcp    scripts/install-mcp.sh   config/mcp/*.json"
 )
 
 args=(); only=()

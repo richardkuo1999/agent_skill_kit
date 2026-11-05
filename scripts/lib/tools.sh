@@ -109,6 +109,38 @@ merge_single_file() {
 # escape a string for use as a sed address regex
 sed_escape() { printf '%s' "$1" | sed 's/[][\/.*^$]/\\&/g'; }
 
+# ---- MCP merge helpers. Set one server under a container key in the tool's
+# existing config, preserving every other key. Never overwrite the whole file.
+
+# merge_mcp_json <dest-file> <container-key> <server-name> <server-def-json-file>
+# dest may not exist (treated as {}). Uses jq 1.5-compatible syntax only.
+merge_mcp_json() {
+  local dest=$1 container=$2 name=$3 deff=$4 tmp; tmp=$(mktemp)
+  [ -f "$dest" ] || echo '{}' > "$dest"
+  jq --arg c "$container" --arg n "$name" --slurpfile d "$deff" \
+     '.[$c] = ((.[$c] // {}) + {($n): $d[0]})' "$dest" > "$tmp"
+  mv "$tmp" "$dest"
+}
+
+# merge_mcp_toml <dest-file> <table-prefix> <server-name> <server-def-json-file>
+# Reads the def from JSON, writes TOML under [<prefix>.<name>], preserving the
+# rest of dest. Requires the python 'toml' package (caller checks).
+merge_mcp_toml() {
+  local dest=$1 prefix=$2 name=$3 deff=$4
+  [ -f "$dest" ] || : > "$dest"
+  python3 - "$dest" "$prefix" "$name" "$deff" <<'PY'
+import sys, json, toml
+dest, prefix, name, deff = sys.argv[1:5]
+try:
+    data = toml.load(dest)
+except Exception:
+    data = {}
+d = json.load(open(deff))
+data.setdefault(prefix, {})[name] = d
+toml.dump(data, open(dest, "w"))
+PY
+}
+
 # Cursor .mdc must begin with the frontmatter ---, so the marker goes in an HTML
 # comment right after the closing --- instead of on line 1.
 #   always -> alwaysApply:true | glob -> globs: | model -> description only | manual -> all empty

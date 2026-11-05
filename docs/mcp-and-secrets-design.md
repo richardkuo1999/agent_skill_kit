@@ -1,8 +1,18 @@
 # MCP support (step 5) and making the repo public
 
-Design notes. No code yet. Two linked goals:
+Design notes. IMPLEMENTED — see install-mcp.sh, config/mcp-targets.tsv,
+config/mcp/. Two linked goals, both done:
 1. Install one MCP-server definition across all five tools.
 2. Keep secrets out of the repo so it can be published publicly.
+
+Implementation summary: `config/mcp/<name>.json` holds one tool-agnostic server
+(command/args/env/url, plus kit metadata `targets`). `install-mcp.sh` resolves
+`${KIT_SECRET:NAME}` from `config/secrets.env` (fail-loud on a missing key),
+strips kit metadata, and merges the server under each tool's container key via
+`merge_mcp_json` (jq, for Kiro/Antigravity/Claude/Cursor) or `merge_mcp_toml`
+(python `toml`, for Codex) — preserving every other key in the user's config.
+Idempotent on reinstall; TOML path skips with a notice if the `toml` package is
+absent. Wired into setup.sh as a third installer.
 
 ## MCP config locations (verified 2026-11)
 

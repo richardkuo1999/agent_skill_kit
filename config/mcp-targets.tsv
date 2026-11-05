@@ -1,0 +1,14 @@
+# Where each tool keeps its MCP server config. Separate from tools.tsv because
+# MCP needs format (json/toml) and a merge key, not just a path.
+# Columns (tab-separated):
+#   name         tool name (matches tools.tsv)
+#   mcp_global   user/global MCP config file ('-' if none)
+#   mcp_project  project MCP config file ('-' if none)
+#   fmt          json | toml
+#   container    where servers live: json key path, or toml table prefix
+# ~ expands to $HOME. --workspace DIR overrides the project base.
+kiro	~/.kiro/settings/mcp.json	.kiro/settings/mcp.json	json	mcpServers
+antigravity	~/.gemini/config/mcp_config.json	-	json	mcpServers
+claude	~/.claude.json	.mcp.json	json	mcpServers
+cursor	~/.cursor/mcp.json	.cursor/mcp.json	json	mcpServers
+codex	~/.codex/config.toml	.codex/config.toml	toml	mcp_servers

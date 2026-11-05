@@ -11,10 +11,17 @@ skill 兩邊共用 `<name>/SKILL.md` 格式，靠符號連結安裝；rule 兩�
 
 ```
 agent_skill_kit/
-+-- setup.sh                 單一入口：一次裝 skill + rule（+ 之後新增的）
++-- setup.sh                 單一入口：一次裝 skill + rule + MCP
 +-- skills/                  已引入的 skill（每個一個資料夾）
 |   +-- upstream-sync/       「檢查上游更新並與你討論」流程
 +-- rules/                   rule 來源（每個一個 .md），安裝時轉成各工具格式
++-- config/
+|   +-- tools.tsv            各工具的 skill/rule 安裝路徑與格式
+|   +-- mcp-targets.tsv      各工具的 MCP 設定檔位置與格式（json/toml）
+|   +-- mcp/                 MCP server 定義（每個一個 .json，工具無關）
+|   +-- secrets.env          真實密鑰，gitignored，永不 commit
+|   +-- secrets.env.example  密鑰範本
++-- requirements.txt         Python 相依（toml，給 Codex MCP）
 +-- upstream/
 |   +-- skill-sources.tsv    skill 上游來源（repo、分支、skill 目錄）
 |   +-- skill-selected.tsv   已引入 skill 與引入時的 commit
@@ -28,6 +35,7 @@ agent_skill_kit/
 |   +-- install-rule.sh      rule 轉格式後安裝到 Kiro / Antigravity
 |   +-- import-skill.sh      從上游複製單一 skill
 |   +-- import-rule.sh       從上游引入單一 rule（抽 body、套 kit frontmatter）
+|   +-- install-mcp.sh       MCP server 合併進各工具設定檔（含密鑰代入）
 |   +-- check-updates.sh     唯讀，列出 skill 與 rule 的上游變更
 +-- CATALOG.md               全部上游 skill 的勾選清單
 ```
@@ -46,6 +54,13 @@ agent_skill_kit/
 | rule | Cursor | （無檔案式全域） | `<project>/.cursor/rules/*.mdc` |
 | rule | Claude Code | `~/.claude/CLAUDE.md`（合併） | `<project>/CLAUDE.md`（合併） |
 | rule | Codex | `~/.codex/AGENTS.md`（合併） | `<project>/AGENTS.md`（合併） |
+| MCP | Kiro | `~/.kiro/settings/mcp.json` | `<project>/.kiro/settings/mcp.json` |
+| MCP | Antigravity | `~/.gemini/config/mcp_config.json` | （由 app 管理） |
+| MCP | Cursor | `~/.cursor/mcp.json` | `<project>/.cursor/mcp.json` |
+| MCP | Claude Code | `~/.claude.json` | `<project>/.mcp.json` |
+| MCP | Codex | `~/.codex/config.toml` | `<project>/.codex/config.toml` |
+
+MCP server 定義放 `config/mcp/<name>.json`（工具無關）。`install-mcp.sh` 轉成各工具格式（JSON 用 jq、Codex 的 TOML 用 python toml），合併進既有設定檔並保留你其餘的 server 與設定。密鑰用 `${KIT_SECRET:NAME}` 引用，真值放 gitignored 的 `config/secrets.env`（範本是 `config/secrets.env.example`），安裝時代入；缺 key 會報錯中止，不寫出壞設定。這讓整個 repo 可以安全公開。
 
 工具清單定義在 `config/tools.tsv`，加一個新工具就是加一列（細節見 `docs/multi-tool-design.md`）。Cursor 的全域 rule 走它的 User Rules UI，不是檔案，所以全域 rule 安裝會略過。Claude Code 和 Codex 的 rule 是單一檔（CLAUDE.md、AGENTS.md）。kit 只把 `kit_load: always` 的 rule 合併進去（glob/manual/model 會略過，因為單一檔無法選擇性載入）。kit 只管檔案裡 `<!-- kit:start -->` 到 `<!-- kit:end -->` 之間，你自己手寫的其餘內容會保留，重裝只更新 kit 區塊。
 
