@@ -54,13 +54,21 @@ python kit.py check-public
 
 ## Cross-platform specifics
 
-- **Paths**: `tools.tsv` needs per-OS values. Add OS-keyed path columns, or a
-  second table `tools.windows.tsv`, resolved by `platform.system()`. Decide in
-  review. Either way, Windows paths must be VERIFIED from each tool's docs, not
-  guessed (same rule as before). This is the one blocking unknown.
-- **Symlink**: `os.symlink`; on failure (Windows without privilege) fall back to
-  copytree and print that `git pull` then needs a re-run to update. Record which
-  mode was used.
+- **Paths**: RESOLVED — no per-OS table needed. Verified (2026-11) that on
+  Windows `~` = `%USERPROFILE%` for all five tools (Claude's docs state it
+  explicitly; Kiro/Antigravity/Codex/Cursor confirmed by their docs/community),
+  and the path structure is otherwise identical. So `tools.tsv` keeps its `~/...`
+  values and Python resolves them with `pathlib.Path.home()`, which expands
+  correctly per OS. Project-scope paths (`.kiro/`, `.cursor/`, `.agents/`, …) are
+  relative and identical across OSes. Full Windows path table is in
+  docs/windows-paths.md. Two items still need a live check: Antigravity's Windows
+  MCP path (`config\` vs `antigravity\`) and Cursor's `~/.cursor/skills` global
+  skill dir (inferred, medium confidence).
+- **Symlink**: default is try `os.symlink`; on failure (Windows without admin or
+  developer mode) fall back to copytree and print that `git pull` then needs a
+  re-run to update. A `--copy` flag forces copy mode without attempting a symlink
+  (for users who prefer it or know they lack privilege). Record which mode was
+  used. Admin mode is NOT required — do not tell colleagues to run as admin.
 - **Secrets / public**: unchanged design (`config/secrets.env`, `${KIT_SECRET}`),
   just implemented in Python.
 
@@ -84,7 +92,7 @@ python kit.py check-public
 
 - One `kit.py` with subcommands, or several small scripts mirroring today's
   files? (Leaning: one file — easiest to ship and run on Windows.)
-- Per-OS paths: extra columns in tools.tsv, or a separate Windows table?
+- Per-OS paths: RESOLVED — not needed (pathlib handles `~`; see above).
 - Minimum Python version to support (drives the TOML-read fallback).
 - Delete bash after Python lands, or keep both? (Keeping both doubles
   maintenance; deleting loses the Linux-proven baseline.)
