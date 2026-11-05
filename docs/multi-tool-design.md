@@ -176,7 +176,7 @@ Adding an A-class tool = one `tools.tsv` row + one `fmt_*`. Adding a B-class too
   honor `--workspace`.
 - Shared `.agents/` path (Antigravity/Codex/Cursor project scope): installing `all`
   into one workspace would link the same dir several times. Dedupe by real path.
-- Build server bash is old; avoid associative arrays, keep the tsv + awk style.
+- Target bash may be old; avoid associative arrays, keep the tsv + awk style.
 
 ## Execution model: script does the deterministic, agent does the judgment
 

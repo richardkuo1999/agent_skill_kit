@@ -34,8 +34,8 @@ globs: "*.md"             # only for kit_load: glob
 
 - `kit_load` — when the rule activates. `model` has no Kiro equivalent; on Kiro
   it installs as `manual` and `install-rule.sh` prints a warning.
-- `kit_targets` — which tools get this rule. Use to keep machine-specific rules
-  (e.g. a shared-server rule) off the home machine.
+- `kit_targets` — which tools get this rule. Use to keep a tool-specific rule
+  (e.g. one that only makes sense for a particular tool) off the others.
 - `description` — required for `model`, recommended otherwise.
 - `title` — used for Kiro's `title:`. Defaults to the file name.
 

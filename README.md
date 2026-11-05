@@ -1,11 +1,10 @@
 # agent_skill_kit
 
-一份 skill 與 rule 來源，同時給 Kiro（公司）和 Google Antigravity（家裡）使用。
-skill 兩邊共用 `<name>/SKILL.md` 格式，靠符號連結安裝；rule 兩邊 frontmatter 不同，安裝時轉格式。
+一份 skill 與 rule 來源，給多個 AI 工具共用（Kiro、KiroCrew、Antigravity、Cursor、Claude Code、Codex）。
+skill 走共用的 `<name>/SKILL.md` 格式，靠符號連結安裝；rule 各工具 frontmatter 不同，安裝時轉格式。
 一個 `setup.sh` 一次處理全部。
 
-家裡的機器：clone 後跑 `./setup.sh antigravity`，之後 `git pull` 同步 skill，rule 改動要重跑 `setup.sh`。
-公司的機器：`./setup.sh kiro`。
+在一台機器上：clone 後跑 `./setup.sh <tool>`（例如 `./setup.sh kiro`），之後 `git pull` 同步 skill，rule 改動要重跑 `setup.sh`。
 
 ## 結構
 
@@ -68,9 +67,9 @@ MCP server 定義放 `config/mcp/<name>.json`（工具無關）。`install-mcp.s
 一個入口 `setup.sh` 一次處理 skill、rule 和之後加入的東西：
 
 ```bash
-./setup.sh antigravity              # 家裡：skill + rule，全域
-./setup.sh kiro                     # 公司：skill + rule，全域
-./setup.sh all --workspace ~/proj   # 兩個工具，專案層級
+./setup.sh kiro                     # 單一工具：skill + rule，全域
+./setup.sh antigravity              # 另一個工具
+./setup.sh all --workspace ~/proj   # 所有工具，專案層級
 ./setup.sh kiro --only rules        # 只裝 rule
 ```
 
