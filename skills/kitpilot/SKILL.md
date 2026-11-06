@@ -1,6 +1,6 @@
 ---
 name: kitpilot
-description: The pack-management assistant you talk to for your cross-tool skill/rule/MCP pack — you never run kit.py or edit tsv yourself. Routes what you say to the right flow: build a pack or import a repo, follow upstream updates, set up a project's environment, configure a profile, check tool paths. Use for "kitpilot", "幫我建工作包", "引入這個 repo", "幫我為 ProjectA 設置 KIRO 環境", "配一組 skill", "檢查上游更新", "檢查工具路徑".
+description: The pack-management assistant you talk to for your cross-tool skill/rule/MCP pack — you never run kit.py or edit tsv yourself. Routes what you say to the right flow: build a pack or import a repo, follow upstream updates, set up or remove a project's environment, inspect what is installed, add an MCP server, configure a profile, check tool paths. Use for "kitpilot", "幫我建工作包", "引入這個 repo", "幫我為 ProjectA 設置 KIRO 環境", "把環境移除", "裝了哪些", "加一個 MCP server", "配一組 skill", "檢查上游更新", "檢查工具路徑".
 ---
 
 # kitpilot
@@ -25,6 +25,9 @@ it out (route + do it — do not just hand the user off).
 | 引入這個 repo / 幫我建包 / 加這個 repo 的 skill | **curate**, build/import entry |
 | 檢查上游更新 / 有更新嗎 / sync | **curate**, follow-updates entry |
 | 幫我為 ProjectA 設置 KIRO 環境 / 設進… / 裝到… | **install** (below — do it here, no separate skill) |
+| 把 ProjectA 的環境移除 / 拆掉… / 退回 | **uninstall** (below — do it here) |
+| ProjectA 裝了哪些 / 現在有哪些 / 查狀態 | **inspect** (below — do it here) |
+| 加一個 MCP server / 設個 MCP | **import-mcp** (below — do it here) |
 | 配一組 … 的 skill / 幫我弄個 profile | **profile** (below) |
 | 檢查工具路徑 / 工具路徑變了嗎 | the **tools-sync** skill |
 
@@ -49,6 +52,39 @@ three things, then run it:
 
 Then report what landed where. The installed `pilot` carries the profile's playbooks
 and a routing table filled from the profile's `[playbooks]`.
+
+## uninstall — remove a project's environment
+
+Reverse of install. Use the SAME `--profile`, `--workspace` and `--only` the install
+used, so you remove the same set. It only removes what the kit owns (symlinks, rule
+files carrying the kit marker, the kit's own MCP server entries); hand-written content
+stays. Confirm which tool/project first, then:
+
+`python kit.py uninstall <tool> --profile <name> [--workspace <path>] [--only skills|rules|mcp]`
+
+## inspect — what is installed / what the kit holds
+
+- "ProjectA 裝了哪些" → `python kit.py list <tool> [--workspace <path>]` lists the
+  kit-installed skills (link or copy), kit rules and MCP servers for that tool/scope.
+- "有哪些 profile" → `python kit.py profiles`.
+- "包裡現在有甚麼 / 上游來源 / 已引入" → `python kit.py status` (local skills/rules/MCP,
+  registered sources, imported items, profiles). All read-only.
+
+## import-mcp — add an MCP server definition
+
+Triggered by "加一個 MCP server". Turn what the user describes into
+`config/mcp/<name>.json`. Simple stdio/remote server via convenience flags; anything
+whose args start with `-`, or a nested object, via `--json`:
+
+```
+python kit.py import-mcp <name> --command npx --arg -y --arg <server> --env TOKEN=${KIT_SECRET:X}
+python kit.py import-mcp <name> --url https://... --targets kiro,cursor
+python kit.py import-mcp <name> --json '{"command":"uvx","args":["-y","srv"]}'
+```
+
+Secrets go in as `${KIT_SECRET:NAME}`; remind the user to add the real value to
+`config/secrets.env` (never committed). Writing the file does not touch any tool; a
+later `install` does. 
 
 ## profile — configure a set of skills
 

@@ -222,6 +222,25 @@ KIT_BLOCK_START = ("<!-- kit:start " + KIT_MARKER +
 KIT_BLOCK_END = "<!-- kit:end -->"
 
 
+def remove_single_file_block(dest: Path) -> bool:
+    """Remove the kit block (markers inclusive) from dest, preserving all other
+    text. Returns True if a block was found and removed. If removal empties the
+    file, the file is deleted. Mirrors merge_single_file's block boundaries."""
+    if not dest.exists():
+        return False
+    text = dest.read_text(encoding="utf-8")
+    if KIT_BLOCK_START not in text or KIT_BLOCK_END not in text:
+        return False
+    pre = text.split(KIT_BLOCK_START, 1)[0]
+    post = text.split(KIT_BLOCK_END, 1)[1]
+    kept = (pre + post).strip("\n")
+    if kept:
+        dest.write_text(kept + "\n", encoding="utf-8")
+    else:
+        dest.unlink()  # file held only the kit block
+    return True
+
+
 def merge_single_file(dest: Path, block: str):
     """Replace the kit block (markers inclusive) in dest with `block`, or append
     it if absent, or create dest from just the block. Preserves all other text.
@@ -283,6 +302,51 @@ def merge_mcp_toml(dest: Path, prefix: str, name: str, server: dict):
     data = _load_toml(dest)
     data.setdefault(prefix, {})[name] = server
     _dump_toml(dest, data)
+
+
+def unmerge_mcp_json(dest: Path, container: str, name: str) -> bool:
+    """Remove data[container][name] from a JSON file, preserving other servers.
+    Returns True if the server was present. Drops an empty container key."""
+    import json
+    if not dest.exists() or not dest.stat().st_size:
+        return False
+    data = json.loads(dest.read_text(encoding="utf-8"))
+    servers = data.get(container)
+    if not isinstance(servers, dict) or name not in servers:
+        return False
+    del servers[name]
+    if not servers:
+        del data[container]
+    dest.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    return True
+
+
+def unmerge_mcp_toml(dest: Path, prefix: str, name: str) -> bool:
+    """Remove data[prefix][name] from a TOML file, preserving other servers.
+    Returns True if the server was present. Drops an empty prefix table."""
+    data = _load_toml(dest)
+    servers = data.get(prefix)
+    if not isinstance(servers, dict) or name not in servers:
+        return False
+    del servers[name]
+    if not servers:
+        del data[prefix]
+    _dump_toml(dest, data)
+    return True
+
+
+def list_profiles() -> List[Tuple[str, int, int]]:
+    """Every skills/profiles/*.txt as (name, n_skills, n_playbooks), name-sorted."""
+    base = kit_root() / "skills" / "profiles"
+    out = []
+    if base.is_dir():
+        for f in sorted(base.glob("*.txt")):
+            try:
+                sk, pb = load_profile(f.stem)
+                out.append((f.stem, len(sk), len(pb)))
+            except ValueError:
+                out.append((f.stem, 0, 0))
+    return out
 
 
 # ---- GitHub access (anonymous; replaces gh + tar) ---------------------------

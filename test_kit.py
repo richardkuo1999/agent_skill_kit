@@ -43,6 +43,22 @@ def run(sandbox, home, *args, workspace=None):
                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
+def _rc(sandbox, home, *args):
+    """Run and return the exit code (for asserting a command refuses something)."""
+    env = dict(os.environ, HOME=str(home))
+    return subprocess.run([PY, str(sandbox / "kit.py")] + list(args),
+                          cwd=str(sandbox), env=env,
+                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode
+
+
+def _out(sandbox, home, *args):
+    """Run and return stdout (for asserting on a report's text)."""
+    env = dict(os.environ, HOME=str(home))
+    return subprocess.run([PY, str(sandbox / "kit.py")] + list(args),
+                          cwd=str(sandbox), env=env, stdout=subprocess.PIPE,
+                          stderr=subprocess.DEVNULL).stdout.decode("utf-8", "ignore")
+
+
 def main():
     work = Path(tempfile.mkdtemp())
     try:
@@ -142,6 +158,61 @@ def main():
         check(cd('say \\"hi\\"') == 'say "hi"', "clean_desc unescapes quotes")
         check(cd("a" * 200).endswith("..."), "clean_desc truncates long")
         check(cd("plain one-liner") == "plain one-liner", "clean_desc keeps plain")
+
+        # import-mcp: write a definition (--json mode, args start with '-'),
+        # then confirm install picks it up
+        run(sb, home, "import-mcp", "fromcli", "--json",
+            '{"command":"npx","args":["-y","fromcli-server"],'
+            '"env":{"T":"${KIT_SECRET:SMOKE_TOKEN}"}}')
+        imp = json.loads((sb / "config/mcp/fromcli.json").read_text())
+        check(imp.get("command") == "npx" and imp.get("transport") == "stdio",
+              "import-mcp wrote stdio server")
+        check(imp.get("env", {}).get("T") == "${KIT_SECRET:SMOKE_TOKEN}",
+              "import-mcp kept secret ref")
+        run(sb, home, "install", "kiro", "--profile", "smoke", "--only", "mcp")
+        km = json.loads((home / ".kiro/settings/mcp.json").read_text()).get("mcpServers", {})
+        check("fromcli" in km, "import-mcp server installs")
+        # import-mcp refuses clobber without --force
+        rc = _rc(sb, home, "import-mcp", "fromcli", "--url", "https://x")
+        check(rc != 0, "import-mcp refuses existing without --force")
+
+        # uninstall: reverse of install for one tool
+        run(sb, home, "uninstall", "kiro", "--profile", "smoke")
+        check(not (home / ".kiro/skills/smoke-skill").exists()
+              and not (home / ".kiro/skills/smoke-skill").is_symlink(),
+              "uninstall removed skill")
+        check(not (home / ".kiro/skills/pilot").exists()
+              and not (home / ".kiro/skills/pilot").is_symlink(),
+              "uninstall removed pilot")
+        check(not (home / ".kiro/steering/smoke-always.md").exists(),
+              "uninstall removed A-class rule")
+        km2 = json.loads((home / ".kiro/settings/mcp.json").read_text()).get("mcpServers", {})
+        check("smoke" not in km2 and "fromcli" not in km2, "uninstall removed mcp servers")
+        # other tools untouched by a single-tool uninstall
+        check((home / ".cursor/skills/smoke-skill").exists()
+              or (home / ".cursor/skills/smoke-skill").is_symlink(),
+              "uninstall left other tool alone")
+
+        # uninstall B-class: strips kit block, keeps user text
+        claude_p = home / ".claude/CLAUDE.md"
+        claude_p.write_text("my notes\n\n" + claude_p.read_text(), encoding="utf-8")
+        run(sb, home, "uninstall", "claude", "--profile", "smoke", "--only", "rules")
+        after_un = claude_p.read_text()
+        check("kit:start" not in after_un and "my notes" in after_un,
+              "uninstall stripped claude block, kept user text")
+
+        # uninstall leaves hand-written rules alone
+        hand = home / ".kiro/steering/hand.md"
+        hand.parent.mkdir(parents=True, exist_ok=True)
+        hand.write_text("hand-written, no marker\n")
+        run(sb, home, "install", "kiro", "--profile", "smoke", "--only", "rules")
+        run(sb, home, "uninstall", "kiro", "--profile", "smoke", "--only", "rules")
+        check(hand.exists(), "uninstall kept hand-written rule")
+
+        # profiles / list / status run and report
+        check("smoke" in _out(sb, home, "profiles"), "profiles lists smoke")
+        st = _out(sb, home, "status")
+        check("smoke-skill" in st and "smoke" in st, "status shows local content")
 
     finally:
         shutil.rmtree(work, ignore_errors=True)

@@ -16,6 +16,9 @@
 | 「檢查上游更新」 | 比對已引入 skill/rule 的上游變更，三方合併，更新 profile 與 playbook 引用 |
 | 「幫我配一組前端用的 skill」 | 寫一個 profile（哪些 skill 裝、哪些 playbook 路由） |
 | 「幫我為 ProjectA 設置 KIRO 環境」 | 把選好的這組裝進那個 project 的 Kiro（你確認後才動） |
+| 「把 ProjectA 的 KIRO 環境移除」 | 反向移除那組，只拆 kit 裝的，不碰你手寫的 |
+| 「ProjectA 裝了哪些」 | 列出那個工具/專案裝了哪些 kit 的 skill/rule/MCP |
+| 「加一個 MCP server」 | 把你描述的 server 寫成 `config/mcp/<name>.json` 定義 |
 | 「檢查工具路徑有沒有變」 | 讀各工具官方文件，比對安裝路徑有無變動 |
 
 **pilot — 用你的包做開發**（裝進各 AI 工具後，日常對工具說）
@@ -32,9 +35,10 @@ kitpilot 負責管理你的包，只在有 kit 的機器上用，不裝進工具
 
 ```
 agent_skill_kit/
-+-- kit.py                   Agent 用的底層工具（子命令）：install / list-skills /
-|                            import-skill / import-rule / check-updates / diff /
-|                            manifest / check-public / setup
++-- kit.py                   Agent 用的底層工具（子命令）：install / uninstall /
+|                            list-skills / import-skill / import-rule / import-mcp /
+|                            check-updates / diff / manifest / check-public /
+|                            profiles / list / status / setup
 +-- kitlib.py                共用邏輯（讀表、路徑、frontmatter、密鑰、GitHub、合併）
 +-- test_kit.py              端對端 smoke test
 +-- requirements.txt         Python 相依（toml 寫入，給 Codex MCP）
@@ -78,7 +82,15 @@ python kit.py install kiro --copy              # skill 強制用複製，不用�
 python kit.py install kiro --profile web       # 用 web 這組（見下方 profile）
 python kit.py manifest --profile web           # 產 pilot/MANIFEST.md 骨架（給人看的地圖）
 python kit.py setup all                        # setup 是 install 的別名
+
+python kit.py uninstall kiro --profile web     # 移除這組裝進 kiro 的 skill/rule/MCP
+python kit.py list kiro                         # 查 kiro 裝了哪些（kit 裝的）
+python kit.py list kiro --workspace ~/proj      # 查某專案裝了哪些
+python kit.py profiles                           # 列有哪些 profile
+python kit.py status                             # 本地 skill/rule/MCP、上游來源、profile 總覽
 ```
+
+`uninstall` 是 install 的反向：只移除 kit 裝的東西（符號連結、含 kit 標記的 rule 檔、kit 的 MCP server 條目），手寫的 skill 與 rule、你自己的其他 MCP server 都不碰。參數與 install 相同（`--workspace`、`--only`、`--profile`），用相同 profile 才能對準當初裝的那組。
 
 裝哪些 skill 由 profile 決定（`skills/profiles/<name>.txt`，預設 `default`）。清單分兩段：`[skills]` 列要裝到工具的 skill，`[playbooks]` 列要填進 pilot 路由表的 playbook。沒列到的不裝，所以 kit 自己的機制 skill（kitpilot、curate、tools-sync）不會洩漏進工具。入口 `pilot` 一律裝。複製 `default.txt` 成 `web.txt` 之類即可為不同 workspace 準備不同組，用 `--profile web` 選用。pilot 的路由表因 profile 而異，所以帶自訂路由表的 pilot 需搭 `--copy`。
 
@@ -112,6 +124,8 @@ skill 預設符號連結，`git pull` 即同步。symlink 建不了（如 Window
 ⁴ Claude/Codex 的 rule 是單一檔，kit 只合併 `kit_load: always` 的 rule（glob/manual/model 略過），你手寫的其餘內容保留。
 
 MCP server 定義放 `config/mcp/<name>.json`（工具無關），install 時轉成各工具格式並合併進既有設定檔，保留你其餘的 server。密鑰用 `${KIT_SECRET:NAME}` 引用，真值放 gitignored 的 `config/secrets.env`（範本 `secrets.env.example`），安裝時代入；缺 key 報錯中止。這讓 repo 可安全公開。
+
+定義檔可手寫，也可用 `python kit.py import-mcp <name>` 產生。便捷寫法 `--command npx --arg -y --arg 某server --env TOKEN=${KIT_SECRET:X}`；若 arg 以 `-` 開頭（argparse 會當成選項），改用 `--json '<整段物件>'`。遠端 server 用 `--url`。寫檔不動工具，之後 `install` 才生效。
 
 工具清單在 `config/tools.tsv`，加新工具就是加一列（見 `docs/multi-tool-design.md`）。路徑特例見上方表格腳註。
 

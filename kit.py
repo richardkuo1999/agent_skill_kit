@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """agent_skill_kit — cross-platform installer/manager (Python 3.11+).
 
-Single entry point with git-style subcommands. This is the Python port of the
-bash scripts; being ported one piece at a time. Done so far: install (skills).
+Single entry point with git-style subcommands: install / uninstall / list-skills /
+import-skill / import-rule / import-mcp / check-updates / diff / manifest /
+check-public / profiles / list / status / setup.
 
 Usage:
-  python kit.py install <tool>... [--workspace DIR] [--only skills] [--copy]
+  python kit.py install <tool>... [--workspace DIR] [--only skills|rules|mcp] [--copy]
     tool: any name in config/tools.tsv, or 'all'
 """
 import argparse
@@ -225,6 +226,302 @@ def cmd_install(args: argparse.Namespace) -> int:
     if copied_any:
         print("note: some skills were COPIED (no symlink privilege); "
               "after `git pull` updates the kit, re-run install to refresh them.")
+    return 0
+
+
+def _uninstall_skills(t, row, args, root, install_skills):
+    """Remove the skills install would place for this tool/profile. Only touches
+    what the kit owns: a symlink (always safe), or a copied dir whose name is in
+    the install set AND that carries a SKILL.md (so a stray user dir of the same
+    name with no SKILL.md is left alone). Never touches hand-made skills."""
+    sg, sp = row[1], row[2]
+    scope = sp if args.workspace else sg
+    if scope == "-":
+        print("SKIP {}: no skill support".format(t)); return
+    dest_dir = (Path(args.workspace) / scope) if args.workspace else kitlib.expand(scope)
+    for name in install_skills:
+        link = dest_dir / name
+        if link.is_symlink():
+            link.unlink()
+            print("DEL  {}: {} (link)".format(t, name))
+        elif link.is_dir() and (link / "SKILL.md").is_file():
+            shutil.rmtree(link)
+            print("DEL  {}: {} (copy)".format(t, name))
+        else:
+            print("skip {}: {} (not installed)".format(t, name))
+
+
+def _uninstall_rules(t, row, args, root):
+    """Remove kit-installed rules for this tool. A-class: delete only files that
+    carry the kit marker (hand-written rules are left). B-class: strip the kit
+    block from the single file, preserving the user's own text."""
+    rule_class = row[3]
+    scope = row[5] if args.workspace else row[4]
+    if scope == "-":
+        print("SKIP {}: no rule support".format(t)); return
+    rule_srcs = [s for s in sorted((root / "rules").glob("*.md")) if s.name != "README.md"]
+
+    if rule_class == "A":
+        ext = row[7] or "md"
+        dest_dir = (Path(args.workspace) / scope) if args.workspace else kitlib.expand(scope)
+        for src in rule_srcs:
+            out = dest_dir / (src.stem + "." + ext)
+            if not out.exists():
+                continue
+            if kitlib.KIT_MARKER in out.read_text(encoding="utf-8"):
+                out.unlink()
+                print("DEL  {}: {}".format(t, src.stem))
+            else:
+                print("skip {}: {} (hand-written)".format(t, src.stem))
+    elif rule_class == "B":
+        dest = (Path(args.workspace) / scope) if args.workspace else kitlib.expand(scope)
+        if kitlib.remove_single_file_block(dest):
+            print("DEL  {}: kit block removed from {}".format(t, dest.name))
+        else:
+            print("skip {}: no kit block in {}".format(t, dest.name))
+
+
+def _uninstall_mcp(targets, args, root):
+    mcp = kitlib.mcp_table()
+    srcs = sorted((root / "config" / "mcp").glob("*.json"))
+    names = [s.stem for s in srcs]
+    for t in dict.fromkeys(targets):
+        if t not in mcp:
+            continue
+        row = mcp[t]  # name mcp_global mcp_project fmt container doc_url
+        fmt, container = row[3], row[4]
+        scope = row[2] if args.workspace else row[1]
+        if scope == "-":
+            print("SKIP {}: no MCP file".format(t)); continue
+        dest = (Path(args.workspace) / scope) if args.workspace else kitlib.expand(scope)
+        for name in names:
+            unmerge = kitlib.unmerge_mcp_json if fmt == "json" else kitlib.unmerge_mcp_toml
+            if unmerge(dest, container, name):
+                print("DEL  {}: {}".format(t, name))
+            else:
+                print("skip {}: {} (not in {})".format(t, name, dest.name))
+
+
+def cmd_uninstall(args) -> int:
+    """Reverse of install: remove the skills, rules and MCP servers install would
+    place for the given tools/profile. Only removes what the kit owns; never
+    touches hand-written content."""
+    tools = kitlib.tools_table()
+    try:
+        targets = []
+        for w in args.target:
+            targets += kitlib.resolve_targets(tools, w)
+    except ValueError as e:
+        print(e, file=sys.stderr); return 1
+
+    only = set(args.only or [])
+    want_skills = (not only) or ("skills" in only)
+    want_rules = (not only) or ("rules" in only)
+    want_mcp = (not only) or ("mcp" in only)
+    root = kitlib.kit_root()
+
+    profile = getattr(args, "profile", None) or "default"
+    try:
+        prof_skills, _ = kitlib.load_profile(profile)
+    except ValueError as e:
+        print(e, file=sys.stderr); return 1
+    install_skills = list(dict.fromkeys(prof_skills + ["pilot"]))
+
+    for t in dict.fromkeys(targets):
+        row = tools[t]
+        if want_skills:
+            _uninstall_skills(t, row, args, root, install_skills)
+        if want_rules:
+            _uninstall_rules(t, row, args, root)
+    if want_mcp:
+        _uninstall_mcp(targets, args, root)
+    return 0
+
+
+def cmd_import_mcp(args) -> int:
+    """Write config/mcp/<name>.json. Two input modes (AI picks whichever is
+    cleaner): --json '<full object>' for anything (the args list, remote url,
+    nested fields), or the convenience flags --command/--url/--env for a simple
+    stdio/remote server. Validates shape; refuses to clobber unless --force.
+    Why --json exists: argparse treats a bare '-y' in --arg as a flag, so a
+    server whose args start with a dash is only expressible as JSON."""
+    import json
+    root = kitlib.kit_root()
+    if args.json:
+        try:
+            defn = json.loads(args.json)
+        except ValueError as e:
+            print("bad --json: " + str(e), file=sys.stderr); return 1
+        if not isinstance(defn, dict):
+            print("--json must be a JSON object", file=sys.stderr); return 1
+        if "command" not in defn and "url" not in defn:
+            print("--json needs a 'command' (stdio) or 'url' (remote) key", file=sys.stderr)
+            return 1
+        defn.setdefault("transport", "http" if "url" in defn else "stdio")
+        defn.setdefault("targets", args.targets)
+    else:
+        if not args.command and not args.url:
+            print("need --json, or --command (stdio), or --url (remote)", file=sys.stderr)
+            return 1
+        if args.command and args.url:
+            print("--command and --url are mutually exclusive", file=sys.stderr)
+            return 1
+        defn = {}
+        if args.command:
+            defn["command"] = args.command
+            if args.arg:
+                defn["args"] = args.arg
+            defn["transport"] = "stdio"
+        else:
+            defn["url"] = args.url
+            defn["transport"] = "http"
+        if args.env:
+            env = {}
+            for pair in args.env:
+                if "=" not in pair:
+                    print("bad --env (want KEY=VALUE): " + pair, file=sys.stderr); return 1
+                k, v = pair.split("=", 1)
+                env[k.strip()] = v.strip()
+            defn["env"] = env
+        defn["targets"] = args.targets
+    dest = root / "config" / "mcp" / (args.name + ".json")
+    if dest.exists() and not args.force:
+        print("exists: {} (use --force to overwrite)".format(dest), file=sys.stderr); return 1
+    dest.write_text(json.dumps(defn, indent=2) + "\n", encoding="utf-8")
+    secrets = [m for v in (defn.get("env") or {}).values()
+               for m in kitlib._SECRET.findall(v)]
+    print("wrote config/mcp/{}.json (targets={}, transport={})"
+          .format(args.name, args.targets, defn["transport"]))
+    if secrets:
+        print("references secrets: {} — add them to config/secrets.env before install"
+              .format(", ".join(sorted(set(secrets)))))
+    print("next: `python kit.py install <tool>` to write it into a tool's config.")
+    return 0
+
+
+def cmd_profiles(args) -> int:
+    """List skills/profiles/*.txt with their skill and playbook counts."""
+    profs = kitlib.list_profiles()
+    if not profs:
+        print("no profiles in skills/profiles/")
+        return 0
+    print("{} profiles:".format(len(profs)))
+    for name, nsk, npb in profs:
+        print("  {:<16} {} skills, {} playbooks".format(name, nsk, npb))
+    return 0
+
+
+def cmd_list(args) -> int:
+    """List what the kit has installed for one tool: skills (symlink or kit-owned
+    copy), kit rules (A-class marked files / B-class block) and MCP servers.
+    Read-only; inspects the tool's live install locations."""
+    tools = kitlib.tools_table()
+    mcp = kitlib.mcp_table()
+    t = args.tool
+    if t not in tools:
+        print("unknown tool: {} (known: {})".format(t, " ".join(tools)), file=sys.stderr)
+        return 1
+    root = kitlib.kit_root()
+    row = tools[t]
+
+    scope = row[2] if args.workspace else row[1]
+    print("== {} ({})".format(t, "project" if args.workspace else "global"))
+    print("skills:")
+    if scope == "-":
+        print("  (no skill support)")
+    else:
+        sdir = (Path(args.workspace) / scope) if args.workspace else kitlib.expand(scope)
+        found = False
+        if sdir.is_dir():
+            for d in sorted(sdir.iterdir()):
+                if d.is_symlink():
+                    print("  {:<24} link -> {}".format(d.name, os.readlink(str(d)))); found = True
+                elif d.is_dir() and (d / "SKILL.md").is_file():
+                    print("  {:<24} copy".format(d.name)); found = True
+        if not found:
+            print("  (none)")
+
+    print("rules:")
+    rclass = row[3]
+    rscope = row[5] if args.workspace else row[4]
+    if rscope == "-":
+        print("  (no rule support)")
+    elif rclass == "A":
+        ext = row[7] or "md"
+        rdir = (Path(args.workspace) / rscope) if args.workspace else kitlib.expand(rscope)
+        found = False
+        if rdir.is_dir():
+            for f in sorted(rdir.glob("*." + ext)):
+                if kitlib.KIT_MARKER in f.read_text(encoding="utf-8", errors="ignore"):
+                    print("  {}".format(f.name)); found = True
+        if not found:
+            print("  (none)")
+    else:  # B-class
+        rdest = (Path(args.workspace) / rscope) if args.workspace else kitlib.expand(rscope)
+        has = rdest.exists() and kitlib.KIT_BLOCK_START in rdest.read_text(
+            encoding="utf-8", errors="ignore")
+        print("  {} ({})".format(rdest.name, "kit block present" if has else "no kit block"))
+
+    print("mcp:")
+    if t not in mcp:
+        print("  (no MCP support)")
+    else:
+        mrow = mcp[t]
+        mscope = mrow[2] if args.workspace else mrow[1]
+        if mscope == "-":
+            print("  (no MCP file for this scope)")
+        else:
+            mdest = (Path(args.workspace) / mscope) if args.workspace else kitlib.expand(mscope)
+            container = mrow[4]
+            servers = []
+            if mdest.exists() and mdest.stat().st_size:
+                if mrow[3] == "json":
+                    import json
+                    servers = list(json.loads(mdest.read_text(encoding="utf-8"))
+                                   .get(container, {}))
+                else:
+                    servers = list(kitlib._load_toml(mdest).get(container, {}))
+            kit_names = {s.stem for s in (root / "config" / "mcp").glob("*.json")}
+            if servers:
+                for s in sorted(servers):
+                    print("  {}{}".format(s, "  (kit)" if s in kit_names else ""))
+            else:
+                print("  (none)")
+    return 0
+
+
+def cmd_status(args) -> int:
+    """One-screen overview of the kit itself: local skills/rules/MCP counts,
+    registered upstream sources, imported items and available profiles."""
+    root = kitlib.kit_root()
+    skills = [d.name for d in sorted((root / "skills").iterdir())
+              if d.is_dir() and (d / "SKILL.md").is_file()] if (root / "skills").is_dir() else []
+    rules = [s.stem for s in sorted((root / "rules").glob("*.md")) if s.name != "README.md"]
+    mcps = [s.stem for s in sorted((root / "config" / "mcp").glob("*.json"))]
+
+    print("local content:")
+    print("  skills ({}): {}".format(len(skills), ", ".join(skills) or "(none)"))
+    print("  rules  ({}): {}".format(len(rules), ", ".join(rules) or "(none)"))
+    print("  mcp    ({}): {}".format(len(mcps), ", ".join(mcps) or "(none)"))
+
+    sk_src = _read_sources("skill-sources.tsv")
+    ru_src = _read_sources("rule-sources.tsv")
+    sk_sel = _read_sources("skill-selected.tsv")
+    ru_sel = _read_sources("rule-selected.tsv")
+    print("upstream sources:")
+    print("  skill sources ({}): {}".format(
+        len(sk_src), ", ".join(r[0] for r in sk_src) or "(none)"))
+    print("  rule sources  ({}): {}".format(
+        len(ru_src), ", ".join(r[0] for r in ru_src) or "(none)"))
+    print("imported (tracked for updates):")
+    print("  skills: {}".format(
+        ", ".join("{}/{}".format(r[0], r[2]) for r in sk_sel if len(r) >= 3) or "(none)"))
+    print("  rules:  {}".format(
+        ", ".join("{}/{}".format(r[0], r[2]) for r in ru_sel if len(r) >= 3) or "(none)"))
+
+    print("profiles:")
+    for name, nsk, npb in kitlib.list_profiles():
+        print("  {:<16} {} skills, {} playbooks".format(name, nsk, npb))
     return 0
 
 
@@ -791,6 +1088,15 @@ def main(argv=None) -> int:
                     help="skills/profiles/<name>.txt: which skills install + pilot playbooks")
     pi.set_defaults(func=cmd_install)
 
+    pu = sub.add_parser("uninstall", help="remove kit-installed skills/rules/mcp")
+    pu.add_argument("target", nargs="+", help="tool name(s) from config/tools.tsv, or 'all'")
+    pu.add_argument("--workspace", help="remove from DIR's project-level folders")
+    pu.add_argument("--only", action="append", choices=["skills", "rules", "mcp"],
+                    help="uninstall just one kind (repeatable)")
+    pu.add_argument("--profile", default="default",
+                    help="which profile's skills to remove (matches the install profile)")
+    pu.set_defaults(func=cmd_uninstall)
+
     pls = sub.add_parser("list-skills", help="list a source's skills + descriptions")
     pls.add_argument("source", help="a name registered in upstream/skill-sources.tsv")
     pls.set_defaults(func=cmd_list_skills)
@@ -805,6 +1111,20 @@ def main(argv=None) -> int:
     pr.add_argument("kit_load", nargs="?", default="always",
                     choices=["always", "glob", "manual", "model"])
     pr.set_defaults(func=cmd_import_rule)
+
+    pim = sub.add_parser("import-mcp", help="write a config/mcp/<name>.json definition")
+    pim.add_argument("name", help="server name (file becomes config/mcp/<name>.json)")
+    pim.add_argument("--json", help="full server object as JSON (use when args start with '-')")
+    pim.add_argument("--command", help="stdio server command (e.g. npx)")
+    pim.add_argument("--arg", action="append",
+                     help="one command arg; repeat for each (use --json if an arg starts with '-')")
+    pim.add_argument("--url", help="remote server URL (instead of --command)")
+    pim.add_argument("--env", action="append",
+                     help="KEY=VALUE env var; value may be ${KIT_SECRET:NAME} (repeatable)")
+    pim.add_argument("--targets", default="all",
+                     help="'all' or a comma list of tool names (default all)")
+    pim.add_argument("--force", action="store_true", help="overwrite an existing definition")
+    pim.set_defaults(func=cmd_import_mcp)
 
     pc = sub.add_parser("check-updates", help="list upstream changes (read-only)")
     pc.set_defaults(func=cmd_check_updates)
@@ -822,6 +1142,17 @@ def main(argv=None) -> int:
     pm.add_argument("--profile", default="default")
     pm.add_argument("--tool", default=None, help="annotate the install-target column")
     pm.set_defaults(func=cmd_manifest)
+
+    pp = sub.add_parser("profiles", help="list available profiles + counts")
+    pp.set_defaults(func=cmd_profiles)
+
+    pl = sub.add_parser("list", help="list what the kit installed for one tool")
+    pl.add_argument("tool", help="tool name from config/tools.tsv")
+    pl.add_argument("--workspace", help="inspect DIR's project-level folders")
+    pl.set_defaults(func=cmd_list)
+
+    pst = sub.add_parser("status", help="overview of local content, sources, profiles")
+    pst.set_defaults(func=cmd_status)
 
     # setup = install (skills+rules+mcp in one run); alias for the bash setup.sh habit
     psetup = sub.add_parser("setup", help="install everything (alias of install)")
