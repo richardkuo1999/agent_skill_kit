@@ -17,7 +17,7 @@ agent_skill_kit/
 +-- requirements.txt         Python 相依（toml 寫入，給 Codex MCP）
 +-- skills/                  skill（每個一個資料夾）
 |   +-- pilot/               工作流入口（你的 poteto-mode）+ playbooks/
-|   +-- setup-wizard/        引導建包流程（機制 skill，規劃中）
+|   +-- setup-wizard/        引導建包流程（機制 skill，不裝進工具）
 |   +-- upstream-sync/       「檢查上游更新並與你討論」流程（機制 skill）
 |   +-- tools-sync/          「檢查各工具路徑有無變動」流程（機制 skill）
 |   +-- profiles/            各 profile 清單（決定裝哪些 skill + pilot playbook）
