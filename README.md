@@ -4,14 +4,39 @@
 
 上游同步是輔助：你的 repo 是主角，可以完全自己寫，也可以借用上游再改寫成自己的。
 
-需求：Python 3.11+ 和 git。clone 後跑 `python kit.py install <tool>`。之後 `git pull` 同步 skill，rule 改動要重跑 install。
+需求：Python 3.11+ 和 git。
+
+## 怎麼用：對 AI 說話
+
+你不用自己跑 `kit.py` 或編 tsv。對 AI 說話，它幫你跑。兩個門面，一個管包、一個用包：
+
+**kitpilot — 管理你的包**（在有 kit 的機器上，對 AI 說）
+
+| 你說 | kitpilot 幫你做 |
+|---|---|
+| 「引入 github.com/someone/skills」 | 登記來源、列出它有哪些 skill、逐個和你討論要不要引入 / 合併 / 組成 playbook |
+| 「檢查上游更新」 | 比對已引入 skill/rule 的上游變更，三方合併，更新 profile 與 playbook 引用 |
+| 「幫我配一組前端用的 skill」 | 寫一個 profile（哪些 skill 裝、哪些 playbook 路由） |
+| 「幫我為 ProjectA 設置 KIRO 環境」 | 把選好的這組裝進那個 project 的 Kiro（你確認後才動） |
+| 「檢查工具路徑有沒有變」 | 讀各工具官方文件，比對安裝路徑有無變動 |
+
+**pilot — 用你的包做開發**（裝進各 AI 工具後，日常對工具說）
+
+| 你說 | pilot 幫你做 |
+|---|---|
+| 「幫我修這個 bug」 | 比對你建的 playbook，開對應的工作流（如 fix-bug）照步驟做 |
+| 「加個前端元件」 | 路由到你為這情境建的 playbook |
+
+kitpilot 只在有 kit 的機器上用（管包），不裝進工具；pilot 裝進每個工具（用包）。
+下面的章節是底層細節：這些 `kit.py` 指令由 AI 代跑，你平常不用自己記。
 
 ## 結構
 
 ```
 agent_skill_kit/
-+-- kit.py                   單一入口（子命令）：install / import-skill /
-|                            import-rule / check-updates / diff / check-public / setup
++-- kit.py                   Agent 用的底層工具（子命令）：install / list-skills /
+|                            import-skill / import-rule / check-updates / diff /
+|                            manifest / check-public / setup
 +-- kitlib.py                共用邏輯（讀表、路徑、frontmatter、密鑰、GitHub、合併）
 +-- test_kit.py              端對端 smoke test
 +-- requirements.txt         Python 相依（toml 寫入，給 Codex MCP）
@@ -43,9 +68,9 @@ agent_skill_kit/
     +-- windows-paths.md          各工具在 Windows 的完整路徑表
 ```
 
-## 安裝
+## 底層：install 指令（AI 代跑）
 
-`<tool>` 可填：`kiro`、`kirocrew`、`antigravity`、`cursor`、`claude`、`codex`，或 `all`（全部）。
+以下指令由 kitpilot 門面依你的話代跑，列在這裡供參考或手動除錯。`<tool>` 可填：`kiro`、`kirocrew`、`antigravity`、`cursor`、`claude`、`codex`，或 `all`（全部）。
 
 ```bash
 python kit.py install kiro                     # 單一工具：skill + rule + MCP，全域
@@ -92,9 +117,9 @@ MCP server 定義放 `config/mcp/<name>.json`（工具無關），install 時轉
 
 工具清單在 `config/tools.tsv`，加新工具就是加一列（見 `docs/multi-tool-design.md`）。路徑特例見上方表格腳註。
 
-## 從上游引入
+## 底層：從上游引入（AI 代跑）
 
-要從某個 repo 引入 skill，先把它登記成一個來源，`import-skill` 的 `<source>` 就是這個登記名（不是 repo URL）。
+你只要對 kitpilot 說「引入這個 repo」，下面的步驟它會幫你做。這裡說明底層機制：要從某個 repo 引入 skill，先把它登記成一個來源，`import-skill` 的 `<source>` 就是這個登記名（不是 repo URL）。
 
 1. 在 `upstream/skill-sources.tsv` 加一列（tab 分隔）：
 
@@ -111,11 +136,13 @@ MCP server 定義放 `config/mcp/<name>.json`（工具無關），install 時轉
 
 rule 相同：先登記到 `upstream/rule-sources.tsv`（欄位少一個 `skills_dir`，因為 rule 引入時逐檔指定路徑），再 `python kit.py import-rule <source> <file_path> <local_name> [kit_load]`。
 
-## 更新流程
+## 底層：更新流程（AI 代跑）
+
+對 kitpilot 說「檢查上游更新」即可，下面是它背後做的事。
 
 ### skill（有上游，自動追蹤）
 
-對 agent 說「檢查上游更新」，`kitpilot` 門面會路由到 `curate` 核心流程：
+`kitpilot` 門面路由到 `curate` 核心流程：
 
 1. 跑 `check-updates`（唯讀），列出已引入 skill 的變更和上游新增的 skill。
 2. 已改過的 skill 有上游變更時，`diff <local_name>` 做三方比對，分開顯示你的修改和官方的修改。
@@ -133,7 +160,7 @@ curate 處理 rule 時用 `diff --rule <local_name>` 做 body-only 三方比對�
 
 ### 工具路徑（各家官方可能改）
 
-安裝路徑（`tools.tsv`、`mcp-targets.tsv`）來自官方文件，可能變動。對 agent 說「檢查工具路徑」觸發 `tools-sync`：它讀每個工具的 `doc_url` 比對現有路徑，有變才跟你討論。讀不到或 JS 頁標 UNVERIFIED，不亂猜。
+安裝路徑（`tools.tsv`、`mcp-targets.tsv`）來自官方文件，可能變動。對 kitpilot 說「檢查工具路徑」，它路由到 `tools-sync`：讀每個工具的 `doc_url` 比對現有路徑，有變才跟你討論。讀不到或 JS 頁標 UNVERIFIED，不亂猜。
 
 ## 公開與 push
 
