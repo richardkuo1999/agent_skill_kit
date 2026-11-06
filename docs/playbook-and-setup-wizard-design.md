@@ -1,6 +1,6 @@
-# Playbook、kitpilot/pilot 門面與 curate 核心流程設計
+# Playbook、kitpilot/pilot 助手與 curate 核心流程設計
 
-設計討論文件。定義 kit 的兩個對人門面（kitpilot 管包、pilot 用包）、一個核心流程
+設計討論文件。定義 kit 的兩個對人助手（kitpilot 管包、pilot 用包）、一個核心流程
 （curate）、playbook 概念與給人看的 MANIFEST，並記錄已定決策與實作進度。
 演進過程不在本文，git 歷史可追。
 
@@ -8,7 +8,7 @@
 
 kit 原本只做「安裝既有內容」與「追上游更新」，而且假設使用者自己跑 `kit.py`、自己編 tsv。
 目標改成：**使用者只對 AI 說話，所有指令、tsv 編輯、檔案操作都由 Agent 代跑。**
-kit.py / tsv 是 Agent 的工具，對使用者隱形。使用者介面是自然語言，透過兩個門面。
+kit.py / tsv 是 Agent 的工具，對使用者隱形。使用者介面是自然語言，透過兩個助手。
 
 原本缺的能力：
 - 不知道某個上游 repo 有哪些 skill、各自用途。
@@ -29,7 +29,7 @@ flowchart TD
 kit 附的是「打造 skill 包的工具」，不是一堆現成 skill。成敗在於使用者能多快把空殼
 變成自己的包。
 
-## 兩個對人的門面
+## 兩個對人的助手
 
 使用者只需記兩個詞，一個管包、一個用包。
 
@@ -40,7 +40,7 @@ flowchart TD
         A["建包/引入入口<br/>list-skills 取候選"]
         B["追更新入口<br/>check-updates 取候選"]
         T["檢查工具路徑入口"]
-        I["設環境入口<br/>「設進 ProjectA 的 KIRO」<br/>門面自己做，不另立 skill"]
+        I["設環境入口<br/>「設進 ProjectA 的 KIRO」<br/>助手自己做，不另立 skill"]
     end
     subgraph PL["pilot（用包做開發，裝到每個工具）"]
         direction TB
@@ -54,7 +54,7 @@ flowchart TD
     T --> TS["tools-sync<br/>追各工具官方路徑（不經 curate）"]
 ```
 
-| 門面 | 使用者喊 | 職責 | 裝到工具 |
+| 助手 | 使用者喊 | 職責 | 裝到工具 |
 |---|---|---|---|
 | kitpilot | 「kitpilot，設環境 / 引入 repo / 配一組 / 檢查更新」 | 管理包本身 | 否 |
 | pilot | 「pilot，修 bug / 加功能」 | 用包做開發 | 是 |
@@ -63,7 +63,7 @@ flowchart TD
 
 | 類別 | skill | install 到工具 | 為什麼 |
 |---|---|---|---|
-| 開發門面 | pilot | ✅ 裝 | 要在各工具裡被「修 bug」呼叫 |
+| 開發助手 | pilot | ✅ 裝 | 要在各工具裡被「修 bug」呼叫 |
 | 機制 | kitpilot、curate、tools-sync | ❌ 不裝 | 只在有 kit 的機器上管包時用 |
 
 機制 skill 不裝進工具，正是 O1（見下）要解的：它們不該洩漏進使用者天天工作的 skill 清單。
@@ -72,10 +72,10 @@ flowchart TD
 
 | skill | 角色 | 裝到工具 |
 |---|---|---|
-| kitpilot | 管理門面，四條路由：建包/追更新→curate、工具路徑→tools-sync、設環境→自己跑 install | 否（機制） |
+| kitpilot | 管包助手，四條路由：建包/追更新→curate、工具路徑→tools-sync、設環境→自己跑 install | 否（機制） |
 | curate | 核心流程：評估候選 → 套用 → 維護下游 | 否（機制） |
 | tools-sync | 追各工具官方路徑（與 curate 無關，獨立保留） | 否（機制） |
-| pilot | 開發門面：靜態路由到使用者的開發 playbook | 是 |
+| pilot | 開發助手：靜態路由到使用者的開發 playbook | 是 |
 
 ## curate：一個核心流程，兩個入口
 
@@ -91,7 +91,7 @@ flowchart LR
 ```
 
 後三步（評估、套用、維護下游）兩入口完全相同 → 合成 `curate` 一個 skill，最 DRY。
-兩入口只是薄薄的「取候選」那段，由 kitpilot 門面依使用者的話分流，取得候選後都進 curate。
+兩入口只是薄薄的「取候選」那段，由 kitpilot 助手依使用者的話分流，取得候選後都進 curate。
 
 ### 維護下游（補的關鍵缺口）
 
@@ -107,8 +107,8 @@ curate 尾巴自動跑，而是 kitpilot 的第四條獨立路由：使用者看
 口頭說「設進 ProjectA 的 KIRO」，才跑 `install <tool> --profile <name> --workspace <proj>`。
 
 install **不另立 skill**：它的判斷很薄（確認 project 路徑 → workspace、哪個 profile、
-copy 還 symlink），kitpilot 門面讀到「設環境」時自己問這三項、跑 install、回報。
-curate 和 tools-sync 複雜才值得獨立 skill；install 夠簡單，門面順手做。
+copy 還 symlink），kitpilot 助手讀到「設環境」時自己問這三項、跑 install、回報。
+curate 和 tools-sync 複雜才值得獨立 skill；install 夠簡單，助手順手做。
 
 ## 概念定義：playbook vs 原子 skill
 
@@ -231,7 +231,7 @@ profile 清單呼應 kit 的 tsv 哲學：「哪個裝哪」是關係資料，�
 | D3 | playbook 草稿格式 | 照 poteto-mode：步驟清單 + 每步呼叫的 skill，零新格式 |
 | D4 | 開發入口命名 | `pilot` |
 | D5 | playbook 納不納 install | 跟著 pilot 資料夾走，不獨立 install，tools.tsv 不加欄 |
-| D6 | 管包與用包的 skill 切分 | 兩層：kitpilot（管包門面，不裝）與 pilot（用包，裝）；curate 為共用核心 |
+| D6 | 管包與用包的 skill 切分 | 兩層：kitpilot（管包助手，不裝）與 pilot（用包，裝）；curate 為共用核心 |
 | D7 | pilot 路由表格式 | 照 poteto-mode：一行「情境 -> playbooks/<檔名>.md」 |
 | D8 | 路由表怎麼更新 | 重寫整段（冪等），`<!-- pilot:start -->`～`<!-- pilot:end -->` 框住，框外手寫保留 |
 | D9 | playbook 呼叫 skill 標不標工具語法 | 不標，用中性自然語言，避免綁單一工具 |
@@ -240,7 +240,7 @@ profile 清單呼應 kit 的 tsv 哲學：「哪個裝哪」是關係資料，�
 | D12 | 清單區分 skill / playbook | 兩段：`[skills]` 裝工具，`[playbooks]` 填 pilot 路由表 |
 | D13 | 機制 skill 排除 | 不在任何 profile 的 `[skills]` 即不裝；pilot 例外 |
 | D14 | 核心流程是合還是拆 | 合成 curate 一個 skill + 兩個入口（建包、追更新），最 DRY |
-| D15 | install 要不要獨立 skill | 否，併進 kitpilot 門面自己做 |
+| D15 | install 要不要獨立 skill | 否，併進 kitpilot 助手自己做 |
 
 共同原則：照 poteto-mode 或沿用現有機制，不發明新東西。
 
@@ -252,12 +252,12 @@ profile 清單呼應 kit 的 tsv 哲學：「哪個裝哪」是關係資料，�
 | pilot 骨架 + 範例 playbook fix-bug | ✅ | 3ef2545 |
 | profile 機制（解 O1 + 選擇性安裝 + 路由動態填） | ✅ | 38f69e2 |
 | `kit.py manifest`（M2 骨架） | ✅ | 645cf66 |
-| kitpilot 門面 skill（四條路由） | ✅ | （本批） |
+| kitpilot 助手 skill（四條路由） | ✅ | （本批） |
 | curate 核心流程 skill（含舊 upstream-sync 的 diff/合併） | ✅ | （本批） |
 | 移除舊 setup-wizard、upstream-sync（併入 kitpilot/curate） | ✅ | （本批） |
 
 D14/D15 已落到程式：setup-wizard 和 upstream-sync 移除，共同流程合進 `curate`，
-兩種入口 + install + profile 合進 `kitpilot` 門面，tools-sync 保留獨立由 kitpilot 路由。
+兩種入口 + install + profile 合進 `kitpilot` 助手，tools-sync 保留獨立由 kitpilot 路由。
 
 pstack 兩個 agent（poteto-agent、comment-sicko）本 kit 不處理：Kiro/Antigravity 無對應
 的 subagent 格式，且 pilot 不走 subagent 派工。

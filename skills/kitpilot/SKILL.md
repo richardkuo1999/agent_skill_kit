@@ -1,6 +1,6 @@
 ---
 name: kitpilot
-description: The single facade for managing your cross-tool skill/rule/MCP pack by talking to the AI — you never run kit.py or edit tsv yourself. Routes what you say to the right flow: build a pack or import a repo, follow upstream updates, set up a project's environment, configure a profile, check tool paths. Use for "kitpilot", "幫我建工作包", "引入這個 repo", "幫我為 ProjectA 設置 KIRO 環境", "配一組 skill", "檢查上游更新", "檢查工具路徑".
+description: The pack-management assistant you talk to for your cross-tool skill/rule/MCP pack — you never run kit.py or edit tsv yourself. Routes what you say to the right flow: build a pack or import a repo, follow upstream updates, set up a project's environment, configure a profile, check tool paths. Use for "kitpilot", "幫我建工作包", "引入這個 repo", "幫我為 ProjectA 設置 KIRO 環境", "配一組 skill", "檢查上游更新", "檢查工具路徑".
 ---
 
 # kitpilot
@@ -9,7 +9,7 @@ Kit root: the directory holding `kit.py` and `skills/` (from this skill's real p
 Reply to the user in Traditional Chinese (Taiwan terms).
 
 This is a MECHANISM skill: it stays in the kit, never installed into tools. It is the
-facade for **managing the pack**. For **using the pack** day to day (「修 bug」「加功能」),
+assistant for **managing the pack**. For **using the pack** day to day (「修 bug」「加功能」),
 that is the separate `pilot` skill installed into each tool.
 
 The user only talks to you. You run every `kit.py` command and edit every tsv on their

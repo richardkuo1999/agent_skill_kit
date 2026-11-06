@@ -40,7 +40,7 @@ agent_skill_kit/
 +-- requirements.txt         Python 相依（toml 寫入，給 Codex MCP）
 +-- skills/                  skill（每個一個資料夾）
 |   +-- pilot/               用包做開發的入口（你的 poteto-mode）+ playbooks/，裝進工具
-|   +-- kitpilot/            管包門面（機制 skill，不裝進工具）
+|   +-- kitpilot/            管包助手（機制 skill，不裝進工具）
 |   +-- curate/              引入/追更新核心流程（機制 skill）
 |   +-- tools-sync/          「檢查各工具路徑有無變動」流程（機制 skill）
 |   +-- profiles/            各 profile 清單（決定裝哪些 skill + pilot playbook）
@@ -68,7 +68,7 @@ agent_skill_kit/
 
 ## 底層：install 指令（AI 代跑）
 
-以下指令由 kitpilot 門面依你的話代跑，列在這裡供參考或手動除錯。`<tool>` 可填：`kiro`、`kirocrew`、`antigravity`、`cursor`、`claude`、`codex`，或 `all`（全部）。
+以下指令由 kitpilot 助手依你的話代跑，列在這裡供參考或手動除錯。`<tool>` 可填：`kiro`、`kirocrew`、`antigravity`、`cursor`、`claude`、`codex`，或 `all`（全部）。
 
 ```bash
 python kit.py install kiro                     # 單一工具：skill + rule + MCP，全域
@@ -140,7 +140,7 @@ rule 相同：先登記到 `upstream/rule-sources.tsv`（欄位少一個 `skills
 
 ### skill（有上游，自動追蹤）
 
-`kitpilot` 門面路由到 `curate` 核心流程：
+`kitpilot` 助手路由到 `curate` 核心流程：
 
 1. 跑 `check-updates`（唯讀），列出已引入 skill 的變更和上游新增的 skill。
 2. 已改過的 skill 有上游變更時，`diff <local_name>` 做三方比對，分開顯示你的修改和官方的修改。

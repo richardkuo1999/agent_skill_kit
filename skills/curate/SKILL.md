@@ -1,6 +1,6 @@
 ---
 name: curate
-description: The kit's core flow for evaluating upstream skill/rule candidates and applying the user's decision. Two entries feed it — building/importing a pack (list-skills) and following upstream updates (check-updates) — then it runs the same three steps: evaluate each candidate (overlap, options), apply (import / merge / replace / three-way-diff adoption), maintain downstream (profile, playbook references). Reached via the kitpilot facade, not called directly by the user.
+description: The kit's core flow for evaluating upstream skill/rule candidates and applying the user's decision. Two entries feed it — building/importing a pack (list-skills) and following upstream updates (check-updates) — then it runs the same three steps: evaluate each candidate (overlap, options), apply (import / merge / replace / three-way-diff adoption), maintain downstream (profile, playbook references). Reached via the kitpilot assistant, not called directly by the user.
 ---
 
 # curate
@@ -9,17 +9,17 @@ Kit root: the directory holding `kit.py` and `skills/` (from this skill's real p
 Reply to the user in Traditional Chinese (Taiwan terms).
 
 This is a MECHANISM skill: it stays in the kit, never installed into tools. The
-`kitpilot` facade routes "build / import a pack" and "follow upstream updates" here;
+the `kitpilot` assistant routes "build / import a pack" and "follow upstream updates" here;
 both share the three steps below, differing only in how candidates are obtained.
 
 Never import, overwrite or commit before the user approves each item. curate only
 touches kit internals (skills/, rules/, profiles/, pilot/playbooks). It never writes
 into the user's work environment — that is `install`, a separate step the user
-confirms (handled by the kitpilot facade, not here).
+confirms (handled by the kitpilot assistant, not here).
 
 ## Entry: get candidates
 
-Two ways in. The facade picks one from the user's words, then runs the three steps.
+Two ways in. The kitpilot assistant picks one from the user's words, then runs the three steps.
 
 - **Build / import** (「引入這個 repo」「幫我建包」): a new source. Register it first
   in `upstream/skill-sources.tsv` (`name repo ref skills_dir license_path`) or

@@ -1,6 +1,6 @@
 ---
 name: pilot
-description: Your own workflow router. Reads its own playbook table below and opens the matching playbook for a task (bug fix, feature, investigation, or whatever playbooks you built). Use for "pilot", "run my workflow", or when starting a task that one of your playbooks covers. The playbook table is maintained by the curate flow (via the kitpilot facade) as you add playbooks; this is your own poteto-mode, not a fixed set.
+description: Your own workflow router. Reads its own playbook table below and opens the matching playbook for a task (bug fix, feature, investigation, or whatever playbooks you built). Use for "pilot", "run my workflow", or when starting a task that one of your playbooks covers. The playbook table is maintained by the curate flow (via the kitpilot assistant) as you add playbooks; this is your own poteto-mode, not a fixed set.
 ---
 
 # pilot
