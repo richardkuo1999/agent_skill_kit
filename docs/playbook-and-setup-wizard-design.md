@@ -348,3 +348,28 @@ profile 清單呼應 kit 的 tsv 哲學：「哪個裝哪」是關係資料，�
   playbook `fix-bug.md`。profile 機制將建在這條分支上。
 - `feat/pilot-with-examples`：方案 B 式 pilot（自帶 investigate/fix-bug）。使用者已選
   方案 A，此分支備查，可刪。
+
+## 實作進度（feat/setup-wizard-pilot 分支）
+
+| 塊 | 項目 | 狀態 | commit |
+|---|---|---|---|
+| 1 | `list-skills <source>` 子命令 | ✅ | 942e085 |
+| 2 | pilot 骨架 + 範例 playbook（方案 A，空路由表） | ✅ | 3ef2545 |
+| 2.5 | profile 機制（解 O1 + 選擇性安裝 + pilot 路由動態填） | ✅ | 38f69e2 |
+| 3 | setup-wizard skill | ✅ | 2867818 |
+| 4 | MANIFEST 生成 | ⏸ 待決 | — |
+
+第 4 塊的待決分歧（回來拍板）：MANIFEST「由誰產」。D2 定「精靈生成」，但精靈是
+skill（AI 手寫）。兩種合理做法：
+
+- **M1 純 AI 手寫**：setup-wizard 第 9 步，AI 讀 profile 與 selected.tsv，手寫整份
+  MANIFEST（含 Mermaid 流程圖）。零程式，但每次靠 AI 判斷，無法 `kit.py` 重跑。
+- **M2 骨架 + AI 補**：加 `kit.py manifest --profile <name>` 產骨架（掃 profile、
+  skill-selected.tsv、rule-selected.tsv 列出已裝項目的表格），AI 只補 playbook 的
+  Mermaid 流程圖。可重跑、表格部分確定性高。
+
+傾向 M2：表格是確定性資料，該由程式產；只有「playbook 流程圖」需要 AI 判斷。但 M2 多一個
+子命令，M1 更 lazy。回來定。
+
+pstack 兩個 agent（poteto-agent、comment-sicko）本 kit 不處理：Kiro/Antigravity 無對應
+的 subagent 格式，且本 kit 的 pilot 不走 subagent 派工。
