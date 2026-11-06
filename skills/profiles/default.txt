@@ -2,7 +2,7 @@
 # [skills]  = skill folder names under skills/ to install into tools (one per line).
 # [playbooks] = pilot routing rows: "<when to use it> -> <file>.md" (file under skills/pilot/playbooks/).
 # pilot always installs; it need not be listed. Kit's own mechanism skills
-# (setup-wizard, upstream-sync, tools-sync) are simply never listed, so they
+# (kitpilot, curate, tools-sync) are simply never listed, so they
 # never install into tools.
 # Copy this file to a new name (e.g. web.txt) for a per-workspace profile,
 # then: python kit.py install <tool> --profile web

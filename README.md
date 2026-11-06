@@ -16,9 +16,9 @@ agent_skill_kit/
 +-- test_kit.py              端對端 smoke test
 +-- requirements.txt         Python 相依（toml 寫入，給 Codex MCP）
 +-- skills/                  skill（每個一個資料夾）
-|   +-- pilot/               工作流入口（你的 poteto-mode）+ playbooks/
-|   +-- setup-wizard/        引導建包流程（機制 skill，不裝進工具）
-|   +-- upstream-sync/       「檢查上游更新並與你討論」流程（機制 skill）
+|   +-- pilot/               用包做開發的入口（你的 poteto-mode）+ playbooks/，裝進工具
+|   +-- kitpilot/            管包門面（機制 skill，不裝進工具）
+|   +-- curate/              引入/追更新核心流程（機制 skill）
 |   +-- tools-sync/          「檢查各工具路徑有無變動」流程（機制 skill）
 |   +-- profiles/            各 profile 清單（決定裝哪些 skill + pilot playbook）
 +-- rules/                   rule 來源（每個一個 .md），安裝時轉成各工具格式
@@ -57,7 +57,7 @@ python kit.py manifest --profile web           # 產 pilot/MANIFEST.md 骨架（
 python kit.py setup all                        # setup 是 install 的別名
 ```
 
-裝哪些 skill 由 profile 決定（`skills/profiles/<name>.txt`，預設 `default`）。清單分兩段：`[skills]` 列要裝到工具的 skill，`[playbooks]` 列要填進 pilot 路由表的 playbook。沒列到的不裝，所以 kit 自己的機制 skill（setup-wizard、upstream-sync、tools-sync）不會洩漏進工具。入口 `pilot` 一律裝。複製 `default.txt` 成 `web.txt` 之類即可為不同 workspace 準備不同組，用 `--profile web` 選用。pilot 的路由表因 profile 而異，所以帶自訂路由表的 pilot 需搭 `--copy`。
+裝哪些 skill 由 profile 決定（`skills/profiles/<name>.txt`，預設 `default`）。清單分兩段：`[skills]` 列要裝到工具的 skill，`[playbooks]` 列要填進 pilot 路由表的 playbook。沒列到的不裝，所以 kit 自己的機制 skill（kitpilot、curate、tools-sync）不會洩漏進工具。入口 `pilot` 一律裝。複製 `default.txt` 成 `web.txt` 之類即可為不同 workspace 準備不同組，用 `--profile web` 選用。pilot 的路由表因 profile 而異，所以帶自訂路由表的 pilot 需搭 `--copy`。
 
 skill 預設符號連結，`git pull` 即同步。symlink 建不了（如 Windows 無權限）自動退回複製，更新要重跑 install；`--copy` 可強制複製。rule 轉格式後產生檔案，改了要重跑 install。
 
@@ -107,7 +107,7 @@ MCP server 定義放 `config/mcp/<name>.json`（工具無關），install 時轉
 
 2. 查該 repo 的 `skills_dir`，看有哪些含 `SKILL.md` 的資料夾。
 
-3. 引入：`python kit.py import-skill myrepo <skill資料夾名> [本地名]`。它抓下來放進 `skills/`、記下來源與 commit sha，之後才能被 `upstream-sync` 追蹤。
+3. 引入：`python kit.py import-skill myrepo <skill資料夾名> [本地名]`。它抓下來放進 `skills/`、記下來源與 commit sha，之後才能被 `curate` 追蹤更新。
 
 rule 相同：先登記到 `upstream/rule-sources.tsv`（欄位少一個 `skills_dir`，因為 rule 引入時逐檔指定路徑），再 `python kit.py import-rule <source> <file_path> <local_name> [kit_load]`。
 
@@ -115,20 +115,21 @@ rule 相同：先登記到 `upstream/rule-sources.tsv`（欄位少一個 `skills
 
 ### skill（有上游，自動追蹤）
 
-1. 對 agent 說「檢查上游更新」，會觸發 `upstream-sync` skill。
-2. 它執行 `python kit.py check-updates`（唯讀），列出已引入 skill 的變更和上游新增的 skill。
-3. 已改過的 skill 有上游變更時，用 `python kit.py diff <local_name>` 做三方比對，分開顯示你的修改和官方的修改。
-4. 上游新增 skill 時，先檢查是否與現有 skill 重疊、是否影響現有流程，再列選項與你討論（採用 / 合併 / 取代 / 改流程 / 略過 / 暫緩）。
-5. 逐項與你討論；你同意的項目才用 `python kit.py import-skill` 匯入或套用合併結果。
-6. 匯入後只改工作樹，是否 commit 由你決定。
+對 agent 說「檢查上游更新」，`kitpilot` 門面會路由到 `curate` 核心流程：
+
+1. 跑 `check-updates`（唯讀），列出已引入 skill 的變更和上游新增的 skill。
+2. 已改過的 skill 有上游變更時，`diff <local_name>` 做三方比對，分開顯示你的修改和官方的修改。
+3. 新增 skill 先檢查是否與現有重疊、是否影響現有流程，再列選項與你討論（採用 / 合併 / 取代 / 略過 / 暫緩）。
+4. 你同意的項目才套用；套用後 curate 維護下游（更新 profile、查 playbook 引用）。
+5. 只改 kit 內部，不碰你的工具；要生效需另外確認一次 install。是否 commit 由你決定。
 
 ### rule（可有上游，也可自己寫）
 
-rule 可追蹤上游，`check-updates` 同時列出 skill 和 rule 的變更。
+rule 一樣由 curate 處理，`check-updates` 同時列出 skill 和 rule 的變更。
 
 來源：自己寫（在 `rules/` 新增 `.md`，見 `rules/README.md`），或從上游引入（見上方「從上游引入」）。
 
-更新時 `upstream-sync` 一併處理 rule：用 `diff --rule <local_name>` 做 body-only 三方比對，你同意後寫回並更新 sha，再重跑 `install` 重新產生 rule 檔。rule 沒有「掃 repo 找新 rule」這步，由你指定哪個上游檔變成 rule。
+curate 處理 rule 時用 `diff --rule <local_name>` 做 body-only 三方比對，你同意後寫回並更新 sha，再重跑 `install` 重新產生 rule 檔。rule 沒有「掃 repo 找新 rule」這步，由你指定哪個上游檔變成 rule。
 
 ### 工具路徑（各家官方可能改）
 
@@ -147,7 +148,7 @@ repo 可公開，密鑰只放 gitignored 的 `config/secrets.env`，repo 內用 
 ## 限制
 
 - `import-skill`、`import-rule`、`check-updates`、`diff` 需要網路存取 GitHub；匿名 API 每小時 60 次，設 `GITHUB_TOKEN` 可提高上限。`diff` 的三方合併用到 `git`。
-- 各工具的 subagent、slash command、plugin 機制不同。標 ⚠ 的 skill 匯入後要改寫，改寫留在本地副本，上游變更時 `upstream-sync` 會提醒衝突。
+- 各工具的 subagent、slash command、plugin 機制不同。標 ⚠ 的 skill 匯入後要改寫，改寫留在本地副本，上游變更時 `curate` 會提醒衝突。
 - Antigravity 的 skill 與 rule 路徑依官方文件（[skills](https://antigravity.google/docs/skills)、[rules](https://antigravity.google/docs/rules)）設定，尚未在 Antigravity 實機驗證。
 - `rules/` 目前是空的。這個 kit 只提供 rule 管理工具，實際要帶哪些 rule 由你之後決定。
 - Kiro 的 `fileMatchPattern`（glob rule）確切語法尚未確認，第一次裝 glob rule 時要驗證。

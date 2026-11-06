@@ -117,9 +117,10 @@ def main():
 
         # profile: pilot always installs even though smoke.txt omits it
         check((home / ".kiro/skills/pilot/SKILL.md").exists(), "pilot always installed")
-        # profile: a skill NOT in the profile is NOT installed (mechanism skills excluded)
-        check(not (home / ".kiro/skills/upstream-sync").exists(),
-              "non-profile skill excluded")
+        # profile: a mechanism skill NOT in the profile is NOT installed
+        check(not (home / ".kiro/skills/kitpilot").exists() and
+              not (home / ".kiro/skills/curate").exists(),
+              "mechanism skills excluded")
         # profile + --copy: pilot routing table filled from [playbooks]
         home2 = work / "home2"
         run(sb, home2, "install", "kiro", "--profile", "smoke", "--copy")

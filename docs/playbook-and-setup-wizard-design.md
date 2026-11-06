@@ -246,21 +246,18 @@ profile 清單呼應 kit 的 tsv 哲學：「哪個裝哪」是關係資料，�
 
 ## 實作進度（feat/setup-wizard-pilot 分支）
 
-底層子命令（第 1-4 塊）已做，門面/curate 重構（D14、D15）尚未落到程式。
-
 | 項目 | 狀態 | commit |
 |---|---|---|
 | `list-skills <source>` 子命令 | ✅ | 942e085 |
 | pilot 骨架 + 範例 playbook fix-bug | ✅ | 3ef2545 |
 | profile 機制（解 O1 + 選擇性安裝 + 路由動態填） | ✅ | 38f69e2 |
 | `kit.py manifest`（M2 骨架） | ✅ | 645cf66 |
-| 舊 setup-wizard skill（將被 kitpilot + curate 取代） | ⏳ 待重構 | 2867818 |
-| kitpilot 門面 skill | ❌ 未做 | — |
-| curate 核心流程 skill（併入 upstream-sync 的 diff/合併） | ❌ 未做 | — |
+| kitpilot 門面 skill（四條路由） | ✅ | （本批） |
+| curate 核心流程 skill（含舊 upstream-sync 的 diff/合併） | ✅ | （本批） |
+| 移除舊 setup-wizard、upstream-sync（併入 kitpilot/curate） | ✅ | （本批） |
 
-重構說明：第 3 塊做的 setup-wizard 是舊單體設計。D14/D15 定案後，它要拆成
-kitpilot 門面（四條路由）+ curate 核心流程；upstream-sync 的追更新邏輯併入 curate；
-tools-sync 保留獨立，由 kitpilot 路由。這是下一步實作。
+D14/D15 已落到程式：setup-wizard 和 upstream-sync 移除，共同流程合進 `curate`，
+兩種入口 + install + profile 合進 `kitpilot` 門面，tools-sync 保留獨立由 kitpilot 路由。
 
 pstack 兩個 agent（poteto-agent、comment-sicko）本 kit 不處理：Kiro/Antigravity 無對應
 的 subagent 格式，且 pilot 不走 subagent 派工。
