@@ -1,110 +1,114 @@
-# Playbook、setup 精靈與 pilot 入口設計
+# Playbook、kitpilot/pilot 門面與 curate 核心流程設計
 
-設計討論文件。定義三個新概念（playbook、setup-wizard 精靈、pilot 入口）與一份
-給人看的 MANIFEST，並釐清哪些沿用現有機制、哪些要新增。尚無程式實作，本文是實作前的對齊。
+設計討論文件。定義 kit 的兩個對人門面（kitpilot 管包、pilot 用包）、一個核心流程
+（curate）、playbook 概念與給人看的 MANIFEST，並記錄已定決策與實作進度。
+演進過程不在本文，git 歷史可追。
 
 ## 這份文件要解決的問題
 
-目前 kit 只做「安裝既有內容」與「追上游更新」。使用者 clone 後得自己讀 README、
-逐條下指令，而且：
+kit 原本只做「安裝既有內容」與「追上游更新」，而且假設使用者自己跑 `kit.py`、自己編 tsv。
+目標改成：**使用者只對 AI 說話，所有指令、tsv 編輯、檔案操作都由 Agent 代跑。**
+kit.py / tsv 是 Agent 的工具，對使用者隱形。使用者介面是自然語言，透過兩個門面。
 
-- 不知道某個上游 repo 裡有哪些 skill、各自用途。
+原本缺的能力：
+- 不知道某個上游 repo 有哪些 skill、各自用途。
 - 引入時沒有「要不要引入、是否和現有重疊、能不能組合」的判斷協助。
 - 裝完後沒有一份「我這套有哪些工具、怎麼用」的地圖。
 - 沒有一個跟著「使用者自己這套」走的使用入口。
 
-pstack 的 `poteto-mode` 解決了最後一項，但它的 playbook 和路由表是 pstack 作者寫死的。
-本設計要的是「使用者自己的 poteto-mode」：入口運作一樣（靜態讀自己 SKILL.md 路由表），
-但 playbook 和路由表由 setup-wizard 幫使用者建與維護，跟著使用者實際裝了什麼走。
-
 ## 定位：打造 kit 的 kit
 
-```
-                   本身不帶內容
-                        │
-        ┌───────────────┼───────────────┐
-        ▼               ▼               ▼
-     機制本體        設定骨架        使用者內容
-   kit.py/kitlib    tools.tsv        rules/
-   upstream-sync    *.example.tsv    skills/
-   tools-sync                        config/mcp/
-   setup-wizard                      skills/pilot/playbooks/
-   (本設計新增)                      (本設計新增)
-                                          │
-                                     空殼，使用者填
+```mermaid
+flowchart TD
+    ROOT["kit（本身不帶內容）"]
+    ROOT --> M["機制本體<br/>kit.py / kitlib<br/>kitpilot、curate、tools-sync、pilot"]
+    ROOT --> C["設定骨架<br/>tools.tsv、*.example.tsv"]
+    ROOT --> U["使用者內容（空殼，使用者填）<br/>rules/、skills/、config/mcp/<br/>skills/pilot/playbooks/"]
 ```
 
 kit 附的是「打造 skill 包的工具」，不是一堆現成 skill。成敗在於使用者能多快把空殼
 變成自己的包。
 
-## 兩個 skill：setup-wizard 與 pilot
+## 兩個對人的門面
 
-這是本設計最重要的區分。精靈和入口是**兩個**獨立 skill，不是一個。
-
-| | setup-wizard（精靈） | pilot（入口） |
-|---|---|---|
-| 何時用 | 建包時（偶爾，建完閒置） | 每天工作時（頻繁） |
-| 誰觸發 | 使用者說「幫我建包」 | 使用者說「幫我修 bug」 |
-| 做什麼 | 登記、列、討論、import、組 playbook、維護 pilot 路由表、產 MANIFEST | 讀自己 SKILL.md 路由表，開對應 playbook |
-| 要不要鋪到各工具 | 否，留在 kit（像 upstream-sync） | 是，裝到每個工具，天天用 |
-| 類比 pstack | pstack 沒有建包精靈 | poteto-mode |
-
-分開的理由：入口要裝到每個工具、天天觸發；精靈只在建包時用一次。合成一個會讓天天用的
-入口夾帶一堆建包邏輯，違反「一個 skill 一件事」。而且 playbook 住在 **pilot** 的資料夾，
-精靈只是「寫檔進那個資料夾」的人——寫的人和被寫的對象本該分開。
-
-## 關鍵結構：playbook 住在 pilot 內（poteto-mode 式）
-
-poteto-mode 的 playbook 不是獨立 skill，而是住在 `poteto-mode/playbooks/*.md`，
-是那個 skill 的**內部檔案**，用相對路徑讀。本設計照抄這個結構：
-
-```
-skills/
-├── setup-wizard/          精靈：建包時用，留在 kit，不鋪到工具
-│   └── SKILL.md
-└── pilot/                 入口：裝到每個工具，天天用
-    ├── SKILL.md           情境→playbook 路由表（= poteto-mode）
-    ├── playbooks/         playbook 都住這（精靈往這寫草稿）
-    │   ├── fix-bug.md
-    │   └── ...
-    └── MANIFEST.md        精靈產，pilot 相對路徑讀
-```
-
-這個結構一次解掉所有疑慮：
-
-| 疑慮 | poteto-mode 式解法 |
-|---|---|
-| playbook 要不要獨立 install？ | 不。跟著 `pilot` 這一個 skill 一起走 |
-| 單檔 vs `<name>/SKILL.md` 格式衝突？ | 不衝突。playbook 是 skill 內部檔，不需符合 skill 格式 |
-| pilot 怎麼找到 playbooks？ | 相對路徑，就在自己資料夾裡 |
-| tools.tsv 要不要加欄？ | **完全不用**。install 複製 `pilot/` 資料夾時自然帶上 playbooks |
-
-## 四個角色與資料流
+使用者只需記兩個詞，一個管包、一個用包。
 
 ```mermaid
 flowchart TD
-    U[使用者] -->|說「幫我建我的工作包」| W[setup-wizard 精靈]
-    W -->|1 登記來源| SRC[(skill-sources.tsv<br/>rule-sources.tsv)]
-    W -->|2 掃來源列 skill+用途| GH[上游 repo<br/>經 gh_tree/gh_extract]
-    W -->|3 討論 引入/合併/組 playbook| U
-    W -->|4 import + 改寫| CONTENT[skills/ rules/ config/mcp/]
-    W -->|5a 同意後生成草稿| PB[skills/pilot/playbooks/*.md]
-    W -->|5b 更新路由表| PSK[skills/pilot/SKILL.md<br/>情境→playbook 對照表]
-    W -->|6 install| TOOLS[六個 AI 工具]
-    W -->|7 產出地圖| MF[skills/pilot/MANIFEST.md]
-    MF -->|人閱讀| U
-    TOOLS -. 含 pilot .-> PILOT[pilot 入口]
-    PILOT -.讀自己 SKILL.md 路由表.-> PSK
-    PILOT -.開對應.-> PB
-    PB -.步驟呼叫.-> CONTENT
+    subgraph KP["kitpilot（管理你的包，機制 skill，只在 kit 這邊用，不裝進各 AI 工具）"]
+        direction TB
+        A["建包/引入入口<br/>list-skills 取候選"]
+        B["追更新入口<br/>check-updates 取候選"]
+        T["檢查工具路徑入口"]
+        I["設環境入口<br/>「設進 ProjectA 的 KIRO」<br/>門面自己做，不另立 skill"]
+    end
+    subgraph PL["pilot（用包做開發，裝到每個工具）"]
+        direction TB
+        P["讀自己路由表 → 使用者的開發 playbook<br/>（fix-bug、加功能…，住 pilot/playbooks/）"]
+    end
+    A --> C
+    B --> C
+    C["curate 核心流程<br/>評估候選 → 套用 → 維護下游<br/>（建包、追更新共用，最 DRY）"]
+    C -. 使用者看結果確認後口頭說 .-> I
+    I --> INST["install<br/>把這組鋪進使用者工作環境<br/>（動使用者專案，確認後才跑）"]
+    T --> TS["tools-sync<br/>追各工具官方路徑（不經 curate）"]
 ```
 
-| 角色 | 是什麼 | 職責 | 產物 |
+| 門面 | 使用者喊 | 職責 | 裝到工具 |
 |---|---|---|---|
-| setup-wizard | 一個 skill（留在 kit） | 引導建包：登記、列、討論、import、組 playbook、更新 pilot 路由表、install、產地圖 | playbook 草稿、pilot 路由表、MANIFEST |
-| playbook | `pilot/playbooks/<name>.md` | 一串步驟的工作流，步驟中呼叫原子 skill | 檔案本身 |
-| MANIFEST | `pilot/MANIFEST.md` | **純給人看**的地圖：有哪些 playbook、流程圖、獨立功能。不參與路由 | 檔案本身 |
-| pilot | 一個 skill（鋪到各工具） | 靜態路由（= poteto-mode）：讀自己 SKILL.md 的對照表，開對應 playbook | 執行期行為 |
+| kitpilot | 「kitpilot，設環境 / 引入 repo / 配一組 / 檢查更新」 | 管理包本身 | 否 |
+| pilot | 「pilot，修 bug / 加功能」 | 用包做開發 | 是 |
+
+### 兩類 skill 的去向
+
+| 類別 | skill | install 到工具 | 為什麼 |
+|---|---|---|---|
+| 開發門面 | pilot | ✅ 裝 | 要在各工具裡被「修 bug」呼叫 |
+| 機制 | kitpilot、curate、tools-sync | ❌ 不裝 | 只在有 kit 的機器上管包時用 |
+
+機制 skill 不裝進工具，正是 O1（見下）要解的：它們不該洩漏進使用者天天工作的 skill 清單。
+
+## skill 清單
+
+| skill | 角色 | 裝到工具 |
+|---|---|---|
+| kitpilot | 管理門面，四條路由：建包/追更新→curate、工具路徑→tools-sync、設環境→自己跑 install | 否（機制） |
+| curate | 核心流程：評估候選 → 套用 → 維護下游 | 否（機制） |
+| tools-sync | 追各工具官方路徑（與 curate 無關，獨立保留） | 否（機制） |
+| pilot | 開發門面：靜態路由到使用者的開發 playbook | 是 |
+
+## curate：一個核心流程，兩個入口
+
+建包與追更新經分析其實是**同一個流程，只有「怎麼取得候選」不同**：
+
+```mermaid
+flowchart LR
+    A1["入口 A：list-skills<br/>（建包/引入，第一次）"] --> E
+    A2["入口 B：check-updates<br/>（追更新，維護已有）"] --> E
+    E["評估候選<br/>重疊檢查、列選項、<br/>討論引入/合併/取代/略過"] --> AP
+    AP["套用<br/>import / 合併 / 取代 /<br/>（更新時）三方 diff 採納"] --> D
+    D["維護下游<br/>更新 profile、查/改 playbook 引用"]
+```
+
+後三步（評估、套用、維護下游）兩入口完全相同 → 合成 `curate` 一個 skill，最 DRY。
+兩入口只是薄薄的「取候選」那段，由 kitpilot 門面依使用者的話分流，取得候選後都進 curate。
+
+### 維護下游（補的關鍵缺口）
+
+舊流程只更新 skill/rule 內容，不碰 profile 和 playbook。curate 的「維護下游」補上：
+skill 被取代改名 → 更新 profile 的 `[skills]`；skill 被引用 → 查 playbook 步驟要不要改。
+全是 kit 內部、可逆的動作。建包和追更新都走這步，所以兩者都會通向 playbook。
+
+### curate 不碰使用者環境；install 是獨立一步
+
+curate 只動 kit 內部（引入 skill/rule、配 profile、組 playbook），全可逆、不碰使用者專案。
+把這組**鋪進使用者的工作環境**是 install，動到使用者實際專案，有副作用。所以 install 不接在
+curate 尾巴自動跑，而是 kitpilot 的第四條獨立路由：使用者看過 curate 的結果、確認沒問題，
+口頭說「設進 ProjectA 的 KIRO」，才跑 `install <tool> --profile <name> --workspace <proj>`。
+
+install **不另立 skill**：它的判斷很薄（確認 project 路徑 → workspace、哪個 profile、
+copy 還 symlink），kitpilot 門面讀到「設環境」時自己問這三項、跑 install、回報。
+curate 和 tools-sync 複雜才值得獨立 skill；install 夠簡單，門面順手做。
 
 ## 概念定義：playbook vs 原子 skill
 
@@ -114,181 +118,64 @@ flowchart TD
 |---|---|---|
 | 存放 | `skills/<name>/SKILL.md` | `skills/pilot/playbooks/<name>.md` |
 | 內容 | 一個能力怎麼做 | 多步流程，每步呼叫哪個 skill |
-| 來源 | 自己寫或上游引入 | 自己寫，或精靈從既有 skill 組出草稿 |
-| install | 獨立裝到各工具 | 不獨立，跟著 pilot 資料夾走 |
+| 來源 | 自己寫或上游引入 | 自己寫，或 curate 從既有 skill 組出草稿 |
+| install | 獨立裝到各工具（由 profile 決定） | 不獨立，跟著 pilot 資料夾走 |
 
-playbook 和原子 skill 都是 Markdown，差別只在「多步流程」vs「單一能力」，
-以及 playbook 是 pilot 的內部檔。零新格式，和 poteto-mode 一致。
+playbook 和原子 skill 都是 Markdown，差別只在「多步流程」vs「單一能力」，以及 playbook
+是 pilot 的內部檔。零新格式，和 poteto-mode 一致。
 
-## setup-wizard 流程
+## pilot：你的 poteto-mode（靜態路由）
 
-```mermaid
-flowchart TD
-    START[使用者啟動精靈] --> Q1{要參考哪些 repo?}
-    Q1 -->|使用者給 repo| REG[登記到 *-sources.tsv]
-    REG --> LIST[掃 repo 的 skills_dir<br/>列出每個 skill + 用途]
-    LIST --> REVIEW{逐個討論}
-    REVIEW -->|和現有重疊| M[建議 合併 或 取代]
-    REVIEW -->|可和現有組合| C[口頭建議組成新 playbook]
-    REVIEW -->|全新且需要| I[import 進 skills/]
-    REVIEW -->|不需要| SKIP[略過]
-    C -->|使用者同意| DRAFT[生成 pilot/playbooks/name.md 草稿<br/>+ 更新 pilot SKILL.md 路由表]
-    DRAFT --> EDIT[使用者審改]
-    M --> MORE
-    I --> MORE
-    SKIP --> MORE
-    EDIT --> MORE{還有要處理的?}
-    MORE -->|是| REVIEW
-    MORE -->|否| INSTALL[install 到選定工具]
-    INSTALL --> MANIFEST[產出 pilot/MANIFEST.md 給人看]
-    MANIFEST --> DONE[回報:裝了什麼、地圖在哪]
-```
-
-關鍵行為（本設計的核心新增）：
-
-- **引入時先檢查現有。** 不是無腦抄進來。精靈比對新 skill 和已裝的，分三類處理：
-  重疊、可組合、全新。重疊與合併的判斷，`upstream-sync` 第 3-5 步已有一半，精靈沿用。
-- **「組 playbook」是口頭建議 + 同意後生成草稿。** 精靈看到 `diagnose`+`fix`+`test`+`pr`
-  四個獨立 skill，口頭說「這四個可組成『修 bug』playbook」。使用者同意，精靈才生成
-  `pilot/playbooks/fix-bug.md` 草稿（串好步驟、標明每步呼叫哪個 skill），交使用者審改。
-  精靈不自作主張寫檔。
-
-## MANIFEST.md 內容（純給人看）
-
-MANIFEST 是**產物不是介面**：人讀它了解自己這套，不被程式 parse。每次 setup 後重生，
-放在 `pilot/MANIFEST.md`，pilot 用相對路徑讀。
-
-```
-# 我的工作包
-
-## Playbooks（多步工作流）
-### fix-bug — 修 bug 的完整流程
-  <Mermaid 流程圖：diagnose → fix → test → pr>
-  來源：自組 | 裝到：kiro, cursor
-
-## 獨立功能（非 playbook 的單一 skill）
-| skill | 用途 | 來源 | 裝到 |
-|---|---|---|---|
-| unslop | 去除文字 AI 味 | pstack | kiro, cursor |
-
-## Rules
-| rule | 載入模式 | 來源 |
-...
-```
-
-流程圖用 Mermaid，給人理解 playbook 怎麼走，不是給機器解析。
-
-## pilot 入口（= 你的 poteto-mode）
-
-pilot 的運作**和 poteto-mode 完全一樣**：SKILL.md 裡有一份「情境 → playbook」對照表，
+pilot 的運作和 poteto-mode 完全一樣：SKILL.md 裡有一份「情境 → playbook」對照表，
 AI 讀那段文字自己判斷該開哪個 playbook。沒有中間層，不讀 MANIFEST，靜態路由。
 
 唯一的差別，也是這個 kit 的意義：
 
 | | poteto-mode | pilot |
 |---|---|---|
-| playbook 哪來 | pstack 作者寫死的 23 個 | **setup-wizard 幫使用者建的** |
-| SKILL.md 路由表哪來 | 作者手寫 | setup-wizard 建 playbook 時一併更新 |
-| 怎麼路由 | 讀自己 SKILL.md 對照表 | 一樣，讀自己 SKILL.md 對照表 |
-
-所以 pilot 不是「動態讀 MANIFEST 路由」。它是靜態的，就像 poteto-mode。差別只在它的
-playbook 和路由表不是作者寫死，而是 setup-wizard 幫使用者長出來的。這就是
-「setup-wizard 幫你寫出你自己的 poteto-mode」。
+| playbook 哪來 | pstack 作者寫死的 23 個 | curate 幫使用者建的 |
+| SKILL.md 路由表哪來 | 作者手寫 | curate 建 playbook 時、install 依 profile 填 |
+| 怎麼路由 | 讀自己 SKILL.md 對照表 | 一樣 |
 
 **MANIFEST 不參與路由。** 它是給人看的地圖，pilot 不讀它。pilot 的路由靠自己 SKILL.md
-的對照表（由 setup-wizard 維護）。
+的對照表。
 
-**為何不直接用 poteto-mode：** poteto-mode 綁 Cursor 的 subagent、slash command，
-且 playbook 是 pstack 作者的那 23 個。本 kit 的價值是跨工具 + 使用者自己的 playbook，
-所以要一個「使用者自己的 poteto-mode」，由 setup-wizard 建與維護。
+**為何不直接用 poteto-mode：** poteto-mode 綁 Cursor 的 subagent、slash command，且
+playbook 是 pstack 作者那 23 個。本 kit 要跨工具 + 使用者自己的 playbook，所以自建輕量入口。
 
-## 現有 vs 要新增
+## MANIFEST.md 內容（純給人看）
 
-```mermaid
-flowchart TD
-    subgraph have[已實作]
-        H1[kit.py 七子命令]
-        H2[import-skill/rule]
-        H3[install 轉六工具]
-        H4[upstream-sync:重疊/合併判斷]
-        H5[kitlib.gh_tree 列檔案樹]
-    end
-    subgraph add[要新增]
-        A1[setup-wizard skill]
-        A2[列 repo skill+用途<br/>用現成 gh_tree]
-        A3[pilot/playbooks 約定]
-        A4[MANIFEST 生成]
-        A5[pilot 入口 skill<br/>= 你的 poteto-mode]
-    end
-    H5 -.可直接用.-> A2
-    H4 -.沿用判斷.-> A1
+MANIFEST 是**產物不是介面**：人讀它了解自己這套，不被程式 parse。放在 `pilot/MANIFEST.md`。
+由 `kit.py manifest` 產骨架（確定性表格），Agent 補每個 playbook 的 Mermaid 流程圖（M2）。
+
+```
+# 我的工作包 (profile: web)
+
+## Playbooks（多步工作流）
+### fix-bug — 修一個可重現的缺陷
+  <Mermaid 流程圖，Agent 補>
+  來源：自組 | 裝到：kiro, cursor
+
+## 獨立 skill
+| skill | 用途 | 來源 | 裝到 |
+|---|---|---|---|
+| unslop | 去除文字 AI 味 | pstack | kiro, cursor |
+
+## Rules
+| rule | 載入模式 | 來源 |
 ```
 
-| 項目 | 狀態 | 說明 |
-|---|---|---|
-| 登記來源 + import | ✅ 已有 | import-skill/rule 完整 |
-| 重疊/合併判斷 | ✅ 半有 | upstream-sync 第 3-5 步，精靈沿用並擴充「組 playbook」 |
-| 列 repo 有哪些 skill | ⚠ 缺子命令 | kitlib 有 `gh_tree()`，缺一個列出並讀各 SKILL.md 描述的功能 |
-| setup-wizard skill | ❌ 新增 | 本設計主體 |
-| pilot/playbooks 約定 | ❌ 新增 | 照 poteto-mode，playbook 住 pilot 資料夾內 |
-| MANIFEST 生成 | ❌ 新增 | 由精靈寫；若要可重跑再加 `kit.py manifest` |
-| pilot 入口 | ❌ 新增 | = poteto-mode；SKILL.md 路由表由 setup-wizard 維護 |
+MANIFEST.md 在範本 repo 被 gitignore（它是使用者產物，隨 profile 而異）；使用者自己的
+fork 可選擇 commit。
 
-## 實作順序建議
-
-有依賴關係，不能一次做完。地基先行：
-
-```mermaid
-flowchart LR
-    S1[1 列 repo skill<br/>最小可驗證] --> S2[2 pilot 骨架<br/>+ 一個範例 playbook]
-    S2 --> S3[3 setup-wizard skill<br/>含維護 pilot 路由表]
-    S3 --> S4[4 MANIFEST 生成]
-```
-
-第 1 塊最獨立、馬上能驗證（給個 repo，列出它的 skill 和用途），建議從這切入。
-pilot 的 SKILL.md 路由表由 setup-wizard（第 3）維護，不是獨立階段——pilot 本身就是
-一個靜態 skill（第 2 塊建骨架時一起立），和 poteto-mode 同構。
-
-## 已定決策
-
-| # | 決策 | 定案 |
-|---|---|---|
-| D1 | 列 repo skill 是子命令還是精靈內做 | 子命令 `list-skills <source>`，可獨立測、精靈與人都能用 |
-| D2 | MANIFEST 誰生成 | 精靈生成（只給人看）；需可重跑再加子命令 |
-| D3 | playbook 草稿格式 | 照 poteto-mode：步驟清單 + 每步呼叫的 skill，零新格式 |
-| D4 | 入口 skill 命名 | `pilot` |
-| D5 | playbook 要不要納入 install | **跟著 pilot 資料夾走**，不獨立 install，tools.tsv 不加欄 |
-| D6 | 精靈與入口一個還兩個 skill | 兩個：`setup-wizard`（留 kit）與 `pilot`（鋪到各工具） |
-| D7 | pilot 路由表格式 | 照 poteto-mode：一行一個「情境描述 → playbooks/<檔名>.md」，AI 讀描述自己判斷 |
-| D8 | setup-wizard 怎麼更新路由表 | 重寫整段（冪等，和 playbooks/ 目錄對齊），用 `<!-- pilot:start -->`～`<!-- pilot:end -->` 框住，框外手寫內容保留（沿用 B 類 rule 合併機制） |
-| D9 | playbook 步驟呼叫 skill 要不要標工具語法 | 不標。用中性自然語言（「用 diagnose skill 找根因」），不寫 `/diagnose`，避免綁單一工具 |
-
-D5 原本的疑慮（playbook 格式衝突、install 要不要加欄）由 poteto-mode 式結構化解：
-playbook 是 pilot 的內部檔，install 複製 pilot 資料夾時自然帶上，tools.tsv 完全不動。
-
-D7-D9 的共同原則：照 poteto-mode 或沿用現有機制，不發明新東西。路由表抄 poteto-mode 的
-「Playbooks」段；更新機制沿用 B 類 rule 的區塊標記；跨工具中性描述沿用 ⚠ skill 的教訓。
-
-## Profile：選擇性安裝（D10-D13）
+## Profile：選擇性安裝
 
 ### 起因
 
-兩個需求疊在一起：
+兩個需求疊在一起，用一套 profile 清單機制同時解決：
 
-1. **O1**：`kit.py install` 用 `skills/*/` 掃**所有** skill 裝到工具，連 kit 自己的
-   機制 skill（`setup-wizard`、`upstream-sync`、`tools-sync`）都洩漏進使用者工具。
-2. **不同 workspace 裝不同組 skill**：web 專案要前端那組，infra 專案要維運那組。
-
-兩者都是「install 該裝哪些」的問題。用**一套 profile 清單機制**同時解決。
-
-### 決策
-
-| # | 決策 | 定案 |
-|---|---|---|
-| D10 | O1 + 選擇性安裝怎麼解 | profile 清單（B 方案擴展）。清單決定裝哪些，不靠檔名前綴或分目錄 |
-| D11 | pilot 在 profile 下怎麼辦 | 解法 3：pilot 永遠裝；其路由表由 install 依 profile 清單動態填 |
-| D12 | 清單怎麼區分 skill 與 playbook | 清單分兩段：`[skills]` 裝到工具，`[playbooks]` 填進 pilot 路由表 |
-| D13 | 機制 skill 怎麼排除 | 不在任何 profile 的 `[skills]` 段即不裝；pilot 例外，一律裝 |
+1. **O1**：install 曾用 `skills/*/` 掃**所有** skill 裝到工具，連機制 skill 都洩漏進使用者工具。
+2. **不同 workspace 裝不同組**：web 專案要前端那組，infra 專案要維運那組。
 
 ### profile 清單格式
 
@@ -301,9 +188,9 @@ diagnose
 unslop
 
 [playbooks]
-# 填進 pilot 路由表的 playbook（一行：<情境> → <檔名>）
-修一個可重現的缺陷 → fix-bug.md
-理解或查證、不改程式 → investigate.md
+# 填進 pilot 路由表的 playbook（一行：<情境> -> <檔名>）
+修一個可重現的缺陷 -> fix-bug.md
+理解或查證、不改程式 -> investigate.md
 ```
 
 - `[skills]` 段 → install 把這些 skill 裝到工具。
@@ -315,55 +202,65 @@ unslop
 
 ```mermaid
 flowchart TD
-    I["install tool --profile web"] --> R[讀 profiles/web.txt]
-    R --> S["[skills] 段:裝這些 skill 到工具"]
+    I["install tool --profile web"] --> R["讀 profiles/web.txt"]
+    R --> S["[skills] 段：裝這些 skill 到工具"]
     R --> P["[playbooks] 段"]
-    S --> PILOT[裝 pilot]
-    P --> FILL[填 pilot 的路由表<br/>pilot:start/end]
+    S --> PILOT["裝 pilot（一律）"]
+    P --> FILL["填 pilot 路由表<br/>pilot:start/end"]
     PILOT --> FILL
-    FILL --> DONE[完成:工具有這組 skill<br/>+ pilot 只路由這組 playbook]
+    FILL --> DONE["工具有這組 skill<br/>+ pilot 只路由這組 playbook"]
 ```
 
 - `install <tool>`（無 `--profile`）→ 用 `default.txt`。
-- `install <tool> --profile web` → 用 `web.txt`。
 - playbook 檔案全放一池 `skills/pilot/playbooks/`，清單決定每個 profile 露出哪些。
   一個 playbook 可出現在多個 profile（跨 profile 共用，零複製）。
+- pilot 路由表因 profile 而異，所以帶自訂路由表的 pilot 需搭 `--copy`
+  （symlink 的 pilot 指回 repo 源檔，無法每 profile 不同）。
 
 ### 和既有機制的一致性
 
-profile 清單呼應 kit 的 tsv 哲學：「哪個裝哪」是關係資料，放清單，不硬編在檔名或目錄。
-和 tools.tsv（哪個工具裝哪條路徑）同構。pilot 路由表的填寫沿用 D8 的 `pilot:start/end`
-區塊標記。
+profile 清單呼應 kit 的 tsv 哲學：「哪個裝哪」是關係資料，放清單，不硬編在檔名或目錄，
+和 tools.tsv 同構。pilot 路由表填寫沿用 B 類 rule 的 `pilot:start/end` 區塊標記。
 
-### 對現有程式的影響
+## 已定決策
 
-- `kit.py install` 的 skill 掃描：從「掃 `skills/*/` 全裝」改成「讀 profile 的 `[skills]` 段」。
-- 新增 `--profile` 旗標（預設 `default`）。
-- install 裝完 pilot 後，依 profile 的 `[playbooks]` 段重寫 pilot 路由表。
-- 需要一個 `default.txt`（列目前該裝的 skill，至少 pilot 的範例 playbook）。
+| # | 決策 | 定案 |
+|---|---|---|
+| D1 | 列 repo skill | 子命令 `list-skills <source>`，可獨立測、Agent 與人都能用 |
+| D2 | MANIFEST 生成 | M2：`kit.py manifest` 產表格骨架，Agent 補 playbook 流程圖 |
+| D3 | playbook 草稿格式 | 照 poteto-mode：步驟清單 + 每步呼叫的 skill，零新格式 |
+| D4 | 開發入口命名 | `pilot` |
+| D5 | playbook 納不納 install | 跟著 pilot 資料夾走，不獨立 install，tools.tsv 不加欄 |
+| D6 | 管包與用包的 skill 切分 | 兩層：kitpilot（管包門面，不裝）與 pilot（用包，裝）；curate 為共用核心 |
+| D7 | pilot 路由表格式 | 照 poteto-mode：一行「情境 -> playbooks/<檔名>.md」 |
+| D8 | 路由表怎麼更新 | 重寫整段（冪等），`<!-- pilot:start -->`～`<!-- pilot:end -->` 框住，框外手寫保留 |
+| D9 | playbook 呼叫 skill 標不標工具語法 | 不標，用中性自然語言，避免綁單一工具 |
+| D10 | O1 + 選擇性安裝 | profile 清單，清單決定裝哪些，不靠檔名前綴或分目錄 |
+| D11 | pilot 在 profile 下 | 一律裝；路由表由 install 依 profile 的 `[playbooks]` 填 |
+| D12 | 清單區分 skill / playbook | 兩段：`[skills]` 裝工具，`[playbooks]` 填 pilot 路由表 |
+| D13 | 機制 skill 排除 | 不在任何 profile 的 `[skills]` 即不裝；pilot 例外 |
+| D14 | 核心流程是合還是拆 | 合成 curate 一個 skill + 兩個入口（建包、追更新），最 DRY |
+| D15 | install 要不要獨立 skill | 否，併進 kitpilot 門面自己做 |
 
-### 分支狀態
-
-- `feat/setup-wizard-pilot`（主開發，採用）：方案 A 式 pilot——出廠路由表空，附範例
-  playbook `fix-bug.md`。profile 機制將建在這條分支上。
-- `feat/pilot-with-examples`：方案 B 式 pilot（自帶 investigate/fix-bug）。使用者已選
-  方案 A，此分支備查，可刪。
+共同原則：照 poteto-mode 或沿用現有機制，不發明新東西。
 
 ## 實作進度（feat/setup-wizard-pilot 分支）
 
-| 塊 | 項目 | 狀態 | commit |
-|---|---|---|---|
-| 1 | `list-skills <source>` 子命令 | ✅ | 942e085 |
-| 2 | pilot 骨架 + 範例 playbook（方案 A，空路由表） | ✅ | 3ef2545 |
-| 2.5 | profile 機制（解 O1 + 選擇性安裝 + pilot 路由動態填） | ✅ | 38f69e2 |
-| 3 | setup-wizard skill | ✅ | 2867818 |
-| 4 | MANIFEST 生成（M2） | ✅ | （本批） |
+底層子命令（第 1-4 塊）已做，門面/curate 重構（D14、D15）尚未落到程式。
 
-第 4 塊定案 **M2**：`kit.py manifest --profile <name> [--tool t]` 產骨架——掃 profile、
-skill-selected.tsv、rule-selected.tsv，填出 skill 表與 rule 表（確定性資料），每個
-playbook 留一個 `<!-- flow -->` 佔位。AI 只補 playbook 的 Mermaid 流程圖，表格不動。
-MANIFEST.md 在範本 repo 被 gitignore（它是使用者產物，隨 profile 而異），使用者自己的
-fork 可選擇 commit。
+| 項目 | 狀態 | commit |
+|---|---|---|
+| `list-skills <source>` 子命令 | ✅ | 942e085 |
+| pilot 骨架 + 範例 playbook fix-bug | ✅ | 3ef2545 |
+| profile 機制（解 O1 + 選擇性安裝 + 路由動態填） | ✅ | 38f69e2 |
+| `kit.py manifest`（M2 骨架） | ✅ | 645cf66 |
+| 舊 setup-wizard skill（將被 kitpilot + curate 取代） | ⏳ 待重構 | 2867818 |
+| kitpilot 門面 skill | ❌ 未做 | — |
+| curate 核心流程 skill（併入 upstream-sync 的 diff/合併） | ❌ 未做 | — |
+
+重構說明：第 3 塊做的 setup-wizard 是舊單體設計。D14/D15 定案後，它要拆成
+kitpilot 門面（四條路由）+ curate 核心流程；upstream-sync 的追更新邏輯併入 curate；
+tools-sync 保留獨立，由 kitpilot 路由。這是下一步實作。
 
 pstack 兩個 agent（poteto-agent、comment-sicko）本 kit 不處理：Kiro/Antigravity 無對應
-的 subagent 格式，且本 kit 的 pilot 不走 subagent 派工。
+的 subagent 格式，且 pilot 不走 subagent 派工。
