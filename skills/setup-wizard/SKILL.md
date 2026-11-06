@@ -93,14 +93,18 @@ from the profile's `[playbooks]`. A per-profile routing table needs `--copy`
 
 ### 9. Emit the MANIFEST (for humans)
 
-Write `skills/pilot/MANIFEST.md` — a map the user reads to know what their pack has:
+Run `python kit.py manifest --profile <name>` (optionally `--tool <t>`). It writes
+`skills/pilot/MANIFEST.md` with the deterministic parts filled from the profile and
+selected.tsv: the skill table (skill, purpose, source) and the rule table (rule,
+load mode, source), plus one `<!-- flow -->` placeholder per playbook.
 
-- **Playbooks**: each with a one-line purpose and a small Mermaid flow of its steps.
-- **Standalone skills**: a table of skill, purpose, source, installed-to tools.
-- **Rules**: a table of rule, load mode, source.
+Then fill each `<!-- flow -->` with a small Mermaid diagram of that playbook's
+steps (read the playbook file). That is the only part the program leaves to you;
+the tables are already correct, do not rewrite them.
 
 MANIFEST is for people. pilot does not read it; pilot routes from its own SKILL.md
-table. Regenerate the MANIFEST whenever the pack changes.
+table. Regenerate (rerun `manifest`, refill flows) whenever the pack changes.
+MANIFEST.md is gitignored in the template; the user's own fork may commit it.
 
 ### 10. Report and stop
 

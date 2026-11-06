@@ -53,6 +53,7 @@ python kit.py install all --workspace ~/proj   # 所有工具，專案層級
 python kit.py install kiro --only rules        # 只裝 rule
 python kit.py install kiro --copy              # skill 強制用複製，不用符號連結
 python kit.py install kiro --profile web       # 用 web 這組（見下方 profile）
+python kit.py manifest --profile web           # 產 pilot/MANIFEST.md 骨架（給人看的地圖）
 python kit.py setup all                        # setup 是 install 的別名
 ```
 

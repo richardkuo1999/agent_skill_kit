@@ -127,6 +127,12 @@ def main():
         between = pilot_md.split("pilot:start", 1)[1].split("pilot:end", 1)[0]
         check("playbooks/fix-bug.md" in between, "pilot routes filled (copy mode)")
 
+        # manifest: skeleton with deterministic tables + flow placeholder
+        run(sb, home2, "manifest", "--profile", "smoke")
+        mani = (sb / "skills/pilot/MANIFEST.md").read_text()
+        check("fix-bug" in mani and "<!-- flow:" in mani, "manifest playbook + flow placeholder")
+        check("smoke-skill" in mani, "manifest lists profile skill")
+
         # _clean_desc: list-skills description tidying
         sys.path.insert(0, str(sb))
         import kit as _kit

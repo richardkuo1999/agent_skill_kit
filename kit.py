@@ -239,6 +239,80 @@ def _read_sources(fname):
     return rows
 
 
+def cmd_manifest(args) -> int:
+    """Emit a human-readable MANIFEST skeleton for a profile: tables of skills and
+    rules (deterministic, from the profile and selected.tsv) plus a <!-- flow -->
+    placeholder per playbook for the agent to fill with a Mermaid diagram. M2: the
+    program produces the load-bearing tables; the agent only draws the flows."""
+    root = kitlib.kit_root()
+    profile = args.profile
+    try:
+        prof_skills, prof_playbooks = kitlib.load_profile(profile)
+    except ValueError as e:
+        print(e, file=sys.stderr)
+        return 1
+
+    # source lookup: local_name -> (source, sha) from skill-selected.tsv
+    sk_src = {}
+    for r in _read_sources("skill-selected.tsv"):
+        if len(r) >= 4:
+            sk_src[r[2]] = (r[0], r[3])
+    rule_rows = [r for r in _read_sources("rule-selected.tsv") if len(r) >= 5]
+
+    def desc_of(name):
+        md = root / "skills" / name / "SKILL.md"
+        if not md.is_file():
+            return ""
+        fm, _ = kitlib.split_frontmatter(md.read_text(encoding="utf-8"))
+        return _clean_desc(fm.get("description", ""))
+
+    out = []
+    out.append("# 我的工作包 (profile: {})".format(profile))
+    out.append("")
+    with_tool = bool(args.tool)
+    tool_cell = (" " + args.tool + " |") if with_tool else ""
+    tool_hdr = " 裝到 |" if with_tool else ""
+    tool_sep = "---|" if with_tool else ""
+
+    out.append("## Playbooks（多步工作流）")
+    if prof_playbooks:
+        for ln in prof_playbooks:
+            sep = " -> " if " -> " in ln else ("→" if "→" in ln else None)
+            when, fname = (ln.split(sep, 1) if sep else (ln, ""))
+            fname = fname.strip()
+            if fname and not fname.startswith("playbooks/"):
+                fname = "playbooks/" + fname
+            out.append("### {} — {}".format(fname.replace("playbooks/", "").replace(".md", ""),
+                                             when.strip()))
+            out.append("<!-- flow: 由 agent 補一個 Mermaid 流程圖，讀 skills/pilot/{} 的步驟 -->".format(fname))
+            out.append("")
+    else:
+        out.append("（這個 profile 沒有 playbook）")
+        out.append("")
+
+    out.append("## 獨立 skill")
+    out.append("| skill | 用途 | 來源 |" + tool_hdr)
+    out.append("|---|---|---|" + tool_sep)
+    for name in prof_skills:
+        src = sk_src.get(name, ("自寫", ""))[0]
+        out.append("| {} | {} | {} |".format(name, desc_of(name), src) + tool_cell)
+    out.append("")
+
+    out.append("## Rules")
+    out.append("| rule | 載入模式 | 來源 |")
+    out.append("|---|---|---|")
+    for r in rule_rows:
+        out.append("| {} | {} | {} |".format(r[2], r[3], r[0]))
+    out.append("")
+
+    dest = root / "skills" / "pilot" / "MANIFEST.md"
+    dest.write_text("\n".join(out) + "\n", encoding="utf-8")
+    print("wrote {} (profile {}): {} playbooks, {} skills, {} rules"
+          .format(dest, profile, len(prof_playbooks), len(prof_skills), len(rule_rows)))
+    print("next: have the agent fill each <!-- flow --> with a Mermaid diagram.")
+    return 0
+
+
 def _clean_desc(desc):
     """Tidy a frontmatter description for one-line display. split_frontmatter is a
     minimal single-line YAML reader; when an upstream uses a block scalar (>-, >, |)
@@ -743,6 +817,11 @@ def main(argv=None) -> int:
 
     pcp = sub.add_parser("check-public", help="pre-push safety scan (read-only)")
     pcp.set_defaults(func=cmd_check_public)
+
+    pm = sub.add_parser("manifest", help="write pilot/MANIFEST.md skeleton for a profile")
+    pm.add_argument("--profile", default="default")
+    pm.add_argument("--tool", default=None, help="annotate the install-target column")
+    pm.set_defaults(func=cmd_manifest)
 
     # setup = install (skills+rules+mcp in one run); alias for the bash setup.sh habit
     psetup = sub.add_parser("setup", help="install everything (alias of install)")

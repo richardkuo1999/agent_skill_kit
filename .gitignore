@@ -5,3 +5,7 @@ __pycache__/
 # Real secret values. NEVER commit. See config/secrets.env.example for the template
 # and docs/mcp-and-secrets-design.md for how ${KIT_SECRET:NAME} references resolve.
 config/secrets.env
+
+# Generated per-user map (kit.py manifest). It reflects one user's own profile,
+# so the template repo does not carry it; your own fork may commit it if you like.
+skills/pilot/MANIFEST.md
