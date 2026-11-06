@@ -269,32 +269,82 @@ playbook 是 pilot 的內部檔，install 複製 pilot 資料夾時自然帶上�
 D7-D9 的共同原則：照 poteto-mode 或沿用現有機制，不發明新東西。路由表抄 poteto-mode 的
 「Playbooks」段；更新機制沿用 B 類 rule 的區塊標記；跨工具中性描述沿用 ⚠ skill 的教訓。
 
-## 實作中發現的開放問題（需使用者拍板）
+## Profile：選擇性安裝（D10-D13）
 
-### O1：install 會把 kit 的「機制 skill」也裝進使用者工具
+### 起因
 
-做第 2 塊（pilot 骨架）時發現：`kit.py install` 用 `skills/*/` 掃**所有** skill 資料夾
-裝到各工具。於是 `setup-wizard`、`upstream-sync`、`tools-sync` 這些「kit 維運用」的 skill
-也會被裝進使用者天天工作的六個工具，污染 skill 清單。這是**既有行為**，不是 pilot 引入的，
-但 D6 把 setup-wizard 定為「只留 kit、不鋪到工具」後，衝突浮現。
+兩個需求疊在一起：
 
-要裝的只有 `pilot`（和使用者自己的 skill）。要排除的是 kit 自己的機制 skill。
+1. **O1**：`kit.py install` 用 `skills/*/` 掃**所有** skill 裝到工具，連 kit 自己的
+   機制 skill（`setup-wizard`、`upstream-sync`、`tools-sync`）都洩漏進使用者工具。
+2. **不同 workspace 裝不同組 skill**：web 專案要前端那組，infra 專案要維運那組。
 
-三個方案（未動程式，等拍板）：
+兩者都是「install 該裝哪些」的問題。用**一套 profile 清單機制**同時解決。
 
-| 方案 | 做法 | 優點 | 缺點 |
-|---|---|---|---|
-| A 命名慣例 | kit 機制 skill 用前綴（如 `_upstream-sync`），install 跳過 `_` 開頭 | 零設定、一眼看出 | 要改三個現有 skill 的資料夾名、README/引用 |
-| B 排除清單 | 在 kit 放一個 `skills/.installignore`，列不裝的 skill | 不改現有名 | 多一個檔、install 要讀它 |
-| C 分目錄 | 機制 skill 移到 `kit-skills/`，使用者內容留 `skills/`，install 只掃 `skills/` | 概念最清楚（機制 vs 內容分開） | 動現有目錄結構、upstream-sync 等路徑引用要改 |
+### 決策
 
-傾向 C：它呼應整個 kit「機制 vs 使用者內容」的分層（見「定位」圖），而且 install 只掃
-`skills/` 最單純。但 C 動到現有結構，影響最大，所以留給你決定。做這題前，pilot 已先
-放在 `skills/`，等方案定了再一起歸位。
+| # | 決策 | 定案 |
+|---|---|---|
+| D10 | O1 + 選擇性安裝怎麼解 | profile 清單（B 方案擴展）。清單決定裝哪些，不靠檔名前綴或分目錄 |
+| D11 | pilot 在 profile 下怎麼辦 | 解法 3：pilot 永遠裝；其路由表由 install 依 profile 清單動態填 |
+| D12 | 清單怎麼區分 skill 與 playbook | 清單分兩段：`[skills]` 裝到工具，`[playbooks]` 填進 pilot 路由表 |
+| D13 | 機制 skill 怎麼排除 | 不在任何 profile 的 `[skills]` 段即不裝；pilot 例外，一律裝 |
+
+### profile 清單格式
+
+```
+skills/profiles/<name>.txt
+
+[skills]
+# 裝到工具的 skill（一行一個資料夾名）
+diagnose
+unslop
+
+[playbooks]
+# 填進 pilot 路由表的 playbook（一行：<情境> → <檔名>）
+修一個可重現的缺陷 → fix-bug.md
+理解或查證、不改程式 → investigate.md
+```
+
+- `[skills]` 段 → install 把這些 skill 裝到工具。
+- `[playbooks]` 段 → install 把這些列進 pilot 的 `pilot:start/end` 路由表。
+- 沒列到的 skill 不裝（機制 skill 自然被排除，不必另立 ignore）。
+- `pilot` 不需列，install 一律裝它（它是路由基礎設施）。
+
+### install 行為
+
+```mermaid
+flowchart TD
+    I["install tool --profile web"] --> R[讀 profiles/web.txt]
+    R --> S["[skills] 段:裝這些 skill 到工具"]
+    R --> P["[playbooks] 段"]
+    S --> PILOT[裝 pilot]
+    P --> FILL[填 pilot 的路由表<br/>pilot:start/end]
+    PILOT --> FILL
+    FILL --> DONE[完成:工具有這組 skill<br/>+ pilot 只路由這組 playbook]
+```
+
+- `install <tool>`（無 `--profile`）→ 用 `default.txt`。
+- `install <tool> --profile web` → 用 `web.txt`。
+- playbook 檔案全放一池 `skills/pilot/playbooks/`，清單決定每個 profile 露出哪些。
+  一個 playbook 可出現在多個 profile（跨 profile 共用，零複製）。
+
+### 和既有機制的一致性
+
+profile 清單呼應 kit 的 tsv 哲學：「哪個裝哪」是關係資料，放清單，不硬編在檔名或目錄。
+和 tools.tsv（哪個工具裝哪條路徑）同構。pilot 路由表的填寫沿用 D8 的 `pilot:start/end`
+區塊標記。
+
+### 對現有程式的影響
+
+- `kit.py install` 的 skill 掃描：從「掃 `skills/*/` 全裝」改成「讀 profile 的 `[skills]` 段」。
+- 新增 `--profile` 旗標（預設 `default`）。
+- install 裝完 pilot 後，依 profile 的 `[playbooks]` 段重寫 pilot 路由表。
+- 需要一個 `default.txt`（列目前該裝的 skill，至少 pilot 的範例 playbook）。
 
 ### 分支狀態
 
-- `feat/setup-wizard-pilot`（主開發）：方案 A 式 pilot——出廠路由表空，附一個範例 playbook
-  `fix-bug.md` 示範格式。
-- （計畫）`feat/pilot-with-examples`：方案 B 式 pilot——自帶 investigate/fix-bug 等
-  通用 playbook，路由表預填。供明天並排比較。
+- `feat/setup-wizard-pilot`（主開發，採用）：方案 A 式 pilot——出廠路由表空，附範例
+  playbook `fix-bug.md`。profile 機制將建在這條分支上。
+- `feat/pilot-with-examples`：方案 B 式 pilot（自帶 investigate/fix-bug）。使用者已選
+  方案 A，此分支備查，可刪。

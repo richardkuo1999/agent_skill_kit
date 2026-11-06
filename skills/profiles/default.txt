@@ -1,0 +1,14 @@
+# Default install profile.
+# [skills]  = skill folder names under skills/ to install into tools (one per line).
+# [playbooks] = pilot routing rows: "<when to use it> -> <file>.md" (file under skills/pilot/playbooks/).
+# pilot always installs; it need not be listed. Kit's own mechanism skills
+# (setup-wizard, upstream-sync, tools-sync) are simply never listed, so they
+# never install into tools.
+# Copy this file to a new name (e.g. web.txt) for a per-workspace profile,
+# then: python kit.py install <tool> --profile web
+
+[skills]
+# (no user skills yet; add folder names here as you import or write them)
+
+[playbooks]
+修一個可重現的缺陷：重現、找根因、修、補回歸測試 -> fix-bug.md

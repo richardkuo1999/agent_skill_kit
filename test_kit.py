@@ -51,6 +51,9 @@ def main():
         # fake content
         (sb / "skills" / "smoke-skill").mkdir(parents=True)
         (sb / "skills" / "smoke-skill" / "SKILL.md").write_text("# smoke\n")
+        # test profile: installs smoke-skill and routes the example playbook
+        (sb / "skills" / "profiles" / "smoke.txt").write_text(
+            "[skills]\nsmoke-skill\n[playbooks]\n修缺陷 -> fix-bug.md\n")
         (sb / "rules" / "smoke-always.md").write_text(
             "---\nkit_load: always\ntitle: Smoke Always\ndescription: d\n---\nalways body\n")
         (sb / "rules" / "smoke-glob.md").write_text(
@@ -62,7 +65,7 @@ def main():
         (sb / "config" / "secrets.env").write_text("SMOKE_TOKEN=smoke-secret-value\n")
 
         home = work / "home"
-        run(sb, home, "install", "all")
+        run(sb, home, "install", "all", "--profile", "smoke")
 
         # skills: every tool with a skill dir
         for rel in (".kiro/skills/smoke-skill", ".gemini/config/skills/smoke-skill",
@@ -95,7 +98,7 @@ def main():
 
         # idempotence: reinstall, counts must not grow
         before = (home / ".claude/CLAUDE.md").read_text().count("kit:start")
-        run(sb, home, "install", "all")
+        run(sb, home, "install", "all", "--profile", "smoke")
         after = (home / ".claude/CLAUDE.md").read_text().count("kit:start")
         check(before == 1 and after == 1, "claude block idempotent")
         servers = json.loads((home / ".kiro/settings/mcp.json").read_text()).get("mcpServers", {})
@@ -103,7 +106,7 @@ def main():
 
         # project scope
         proj = work / "proj"
-        run(sb, home, "install", "cursor", workspace=proj)
+        run(sb, home, "install", "cursor", "--profile", "smoke", workspace=proj)
         check((proj / ".cursor/rules/smoke-always.mdc").exists(), "cursor project rule")
 
         # no secret leaked into tracked dirs
@@ -111,6 +114,18 @@ def main():
                      for d in ("skills", "rules")
                      for f in (sb / d).rglob("*") if f.is_file())
         check(not leaked, "no secret leaked into tracked dirs")
+
+        # profile: pilot always installs even though smoke.txt omits it
+        check((home / ".kiro/skills/pilot/SKILL.md").exists(), "pilot always installed")
+        # profile: a skill NOT in the profile is NOT installed (mechanism skills excluded)
+        check(not (home / ".kiro/skills/upstream-sync").exists(),
+              "non-profile skill excluded")
+        # profile + --copy: pilot routing table filled from [playbooks]
+        home2 = work / "home2"
+        run(sb, home2, "install", "kiro", "--profile", "smoke", "--copy")
+        pilot_md = (home2 / ".kiro/skills/pilot/SKILL.md").read_text()
+        between = pilot_md.split("pilot:start", 1)[1].split("pilot:end", 1)[0]
+        check("playbooks/fix-bug.md" in between, "pilot routes filled (copy mode)")
 
         # _clean_desc: list-skills description tidying
         sys.path.insert(0, str(sb))

@@ -146,6 +146,21 @@ def _install_mcp(targets, args, root):
             print("OK   {}: {}".format(t, name))
 
 
+def _fill_pilot(link, playbook_lines, copied):
+    """Fill the installed pilot's routing table from the profile's playbooks.
+    Only safe when pilot was COPIED: a symlink points back at the repo source,
+    so writing through it would mutate the repo and make every install share one
+    table. Under symlink, warn and leave the source table as-is."""
+    target = link / "SKILL.md"
+    is_symlink = link.is_symlink()
+    if is_symlink:
+        if playbook_lines:
+            print("     note: pilot is a symlink; routing table not customized "
+                  "per profile. Use --copy for a profile-specific pilot table.")
+        return
+    kitlib.fill_pilot_routes(target, playbook_lines)
+
+
 def cmd_install(args: argparse.Namespace) -> int:
     tools = kitlib.tools_table()
     try:
@@ -164,6 +179,17 @@ def cmd_install(args: argparse.Namespace) -> int:
     copied_any = False
     marker_line = "# " + kitlib.KIT_MARKER
 
+    # Profile decides which skills install and which playbooks pilot routes.
+    # pilot itself always installs (it is the routing entry), even if a profile
+    # omits it; its routing table is filled from the profile's [playbooks].
+    profile = getattr(args, "profile", None) or "default"
+    try:
+        prof_skills, prof_playbooks = kitlib.load_profile(profile)
+    except ValueError as e:
+        print(e, file=sys.stderr)
+        return 1
+    install_skills = list(dict.fromkeys(prof_skills + ["pilot"]))
+
     for t in dict.fromkeys(targets):  # de-dup, keep order
         row = tools[t]
         # columns: name skill_global skill_project rule_class rule_global rule_project rule_fmt rule_ext doc_url
@@ -175,10 +201,11 @@ def cmd_install(args: argparse.Namespace) -> int:
             else:
                 dest_dir = (Path(args.workspace) / scope) if args.workspace else kitlib.expand(scope)
                 dest_dir.mkdir(parents=True, exist_ok=True)
-                for s in sorted((root / "skills").glob("*/")):
-                    if not s.is_dir():
+                for name in install_skills:
+                    s = root / "skills" / name
+                    if not (s / "SKILL.md").is_file():
+                        print(f"SKIP {t}: {name} (no skills/{name}/SKILL.md)")
                         continue
-                    name = s.name
                     link = dest_dir / name
                     mode = _link_or_copy(s.resolve(), link, args.copy)
                     if mode == "skip":
@@ -187,6 +214,8 @@ def cmd_install(args: argparse.Namespace) -> int:
                         if mode == "copy":
                             copied_any = True
                         print(f"OK   {t}: {name} ({mode})")
+                        if name == "pilot":
+                            _fill_pilot(link, prof_playbooks, args.copy)
         if want_rules:
             _install_rules(t, row, args, root, marker_line)
 
@@ -684,6 +713,8 @@ def main(argv=None) -> int:
     pi.add_argument("--only", action="append", choices=["skills", "rules", "mcp"],
                     help="run just one installer (repeatable)")
     pi.add_argument("--copy", action="store_true", help="force copy instead of symlink")
+    pi.add_argument("--profile", default="default",
+                    help="skills/profiles/<name>.txt: which skills install + pilot playbooks")
     pi.set_defaults(func=cmd_install)
 
     pls = sub.add_parser("list-skills", help="list a source's skills + descriptions")
@@ -719,6 +750,7 @@ def main(argv=None) -> int:
     psetup.add_argument("--workspace")
     psetup.add_argument("--only", action="append", choices=["skills", "rules", "mcp"])
     psetup.add_argument("--copy", action="store_true")
+    psetup.add_argument("--profile", default="default")
     psetup.set_defaults(func=cmd_install)
 
     args = p.parse_args(argv)

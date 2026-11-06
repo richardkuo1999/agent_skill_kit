@@ -15,9 +15,12 @@ agent_skill_kit/
 +-- kitlib.py                共用邏輯（讀表、路徑、frontmatter、密鑰、GitHub、合併）
 +-- test_kit.py              端對端 smoke test
 +-- requirements.txt         Python 相依（toml 寫入，給 Codex MCP）
-+-- skills/                  已引入的 skill（每個一個資料夾）
-|   +-- upstream-sync/       「檢查上游更新並與你討論」流程
-|   +-- tools-sync/          「檢查各工具路徑有無變動」流程
++-- skills/                  skill（每個一個資料夾）
+|   +-- pilot/               工作流入口（你的 poteto-mode）+ playbooks/
+|   +-- setup-wizard/        引導建包流程（機制 skill，規劃中）
+|   +-- upstream-sync/       「檢查上游更新並與你討論」流程（機制 skill）
+|   +-- tools-sync/          「檢查各工具路徑有無變動」流程（機制 skill）
+|   +-- profiles/            各 profile 清單（決定裝哪些 skill + pilot playbook）
 +-- rules/                   rule 來源（每個一個 .md），安裝時轉成各工具格式
 +-- config/
 |   +-- tools.tsv            各工具的 skill/rule 安裝路徑與格式
@@ -49,8 +52,11 @@ python kit.py install kiro                     # 單一工具：skill + rule + M
 python kit.py install all --workspace ~/proj   # 所有工具，專案層級
 python kit.py install kiro --only rules        # 只裝 rule
 python kit.py install kiro --copy              # skill 強制用複製，不用符號連結
+python kit.py install kiro --profile web       # 用 web 這組（見下方 profile）
 python kit.py setup all                        # setup 是 install 的別名
 ```
+
+裝哪些 skill 由 profile 決定（`skills/profiles/<name>.txt`，預設 `default`）。清單分兩段：`[skills]` 列要裝到工具的 skill，`[playbooks]` 列要填進 pilot 路由表的 playbook。沒列到的不裝，所以 kit 自己的機制 skill（setup-wizard、upstream-sync、tools-sync）不會洩漏進工具。入口 `pilot` 一律裝。複製 `default.txt` 成 `web.txt` 之類即可為不同 workspace 準備不同組，用 `--profile web` 選用。pilot 的路由表因 profile 而異，所以帶自訂路由表的 pilot 需搭 `--copy`。
 
 skill 預設符號連結，`git pull` 即同步。symlink 建不了（如 Windows 無權限）自動退回複製，更新要重跑 install；`--copy` 可強制複製。rule 轉格式後產生檔案，改了要重跑 install。
 

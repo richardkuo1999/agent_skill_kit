@@ -56,6 +56,62 @@ def resolve_targets(table: dict, want: str) -> List[str]:
     raise ValueError(f"unknown tool: {want} (known: {' '.join(names)})")
 
 
+# ---- profiles (selective install) -------------------------------------------
+PILOT_ROUTE_START = "<!-- pilot:start -->"
+PILOT_ROUTE_END = "<!-- pilot:end -->"
+
+
+def load_profile(name: str) -> Tuple[List[str], List[str]]:
+    """Parse skills/profiles/<name>.txt into (skills, playbook_lines).
+
+    Two sections: '[skills]' (one skill folder name per line, installed to tools)
+    and '[playbooks]' (one '<situation> -> <file>.md' line per line, listed in
+    pilot's routing table). Lines before any section header, blanks and '#'
+    comments are ignored. A missing file is an error the caller reports."""
+    f = kit_root() / "skills" / "profiles" / (name + ".txt")
+    if not f.is_file():
+        raise ValueError("unknown profile: {} (looked for {})".format(name, f))
+    skills, playbooks, section = [], [], None
+    for raw in f.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("[") and line.endswith("]"):
+            section = line[1:-1].strip().lower()
+            continue
+        if section == "skills":
+            skills.append(line)
+        elif section == "playbooks":
+            playbooks.append(line)
+    return skills, playbooks
+
+
+def fill_pilot_routes(skill_md: Path, playbook_lines: List[str]) -> None:
+    """Rewrite the pilot:start/end block in a pilot SKILL.md with the given
+    routing lines. Idempotent: replaces the block, preserves everything else.
+    Each playbook line '<situation> -> <file>.md' becomes '- <situation> -> playbooks/<file>.md'."""
+    text = skill_md.read_text(encoding="utf-8")
+    if PILOT_ROUTE_START not in text or PILOT_ROUTE_END not in text:
+        return  # not a pilot SKILL.md with markers; leave untouched
+    rows = []
+    for ln in playbook_lines:
+        # tolerate both -> and the unicode arrow the table uses
+        sep = " -> " if " -> " in ln else ("→" if "→" in ln else None)
+        if sep is None:
+            continue
+        left, right = ln.split(sep, 1)
+        fname = right.strip()
+        if not fname.startswith("playbooks/"):
+            fname = "playbooks/" + fname
+        rows.append("- {} → {}".format(left.strip(), fname))
+    body = ("\n".join(rows) + "\n") if rows else ""
+    pre = text.split(PILOT_ROUTE_START, 1)[0]
+    post = text.split(PILOT_ROUTE_END, 1)[1]
+    skill_md.write_text(
+        pre + PILOT_ROUTE_START + "\n" + body + PILOT_ROUTE_END + post,
+        encoding="utf-8")
+
+
 # ---- kit frontmatter (rules/<name>.md) --------------------------------------
 _FM = re.compile(r"\A---\n(.*?)\n---\n?(.*)\Z", re.S)
 
