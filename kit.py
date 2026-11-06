@@ -662,6 +662,26 @@ def cmd_list_skills(args) -> int:
     return 0
 
 
+def _copy_license(root, extracted_root, lic_path, source):
+    """Copy an upstream LICENSE into upstream/licenses/<source>.LICENSE. The dir
+    is not version-controlled (git drops empty dirs), so create it first. A
+    license is a courtesy copy, never load-bearing: if the upstream path is
+    missing or the copy fails, warn and carry on so the import still registers."""
+    import shutil
+    dest_dir = root / "upstream" / "licenses"
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    licf = extracted_root / lic_path
+    if not licf.is_file():
+        print("WARN: no license at {} in upstream; import continues without it"
+              .format(lic_path), file=sys.stderr)
+        return
+    try:
+        shutil.copy(licf, dest_dir / (source + ".LICENSE"))
+    except OSError as e:
+        print("WARN: could not copy license ({}); import continues".format(e),
+              file=sys.stderr)
+
+
 def cmd_import_skill(args) -> int:
     import shutil, tempfile
     root = kitlib.kit_root()
@@ -681,9 +701,7 @@ def cmd_import_skill(args) -> int:
         if dest.exists():
             shutil.rmtree(dest)
         shutil.copytree(srcdir, dest)
-        licf = r / lic
-        if licf.is_file():
-            shutil.copy(licf, root / "upstream" / "licenses" / (args.source + ".LICENSE"))
+        _copy_license(root, r, lic, args.source)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     _upsert_selected("skill-selected.tsv", args.source, args.path, local, sha, key_cols=2)
@@ -716,9 +734,7 @@ def cmd_import_rule(args) -> int:
         out.append("---")
         text = "\n".join(out) + "\n\n" + body.rstrip("\n") + "\n"
         (root / "rules" / (args.local_name + ".md")).write_text(text, encoding="utf-8")
-        licf = r / lic
-        if licf.is_file():
-            shutil.copy(licf, root / "upstream" / "licenses" / (args.source + ".LICENSE"))
+        _copy_license(root, r, lic, args.source)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     _upsert_selected("rule-selected.tsv", args.source, args.file, args.local_name, sha,

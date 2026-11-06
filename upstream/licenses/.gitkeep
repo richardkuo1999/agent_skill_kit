@@ -1,0 +1,3 @@
+# Keeps upstream/licenses/ in version control. import-skill / import-rule copy
+# each upstream LICENSE here as <source>.LICENSE. git does not track empty dirs,
+# so without this placeholder a fresh clone lacks the dir and import would fail.
