@@ -35,6 +35,7 @@ kitpilot 負責管理你的包，只在有 kit 的機器上用，不裝進工具
 
 ```
 agent_skill_kit/
++-- LICENSE                  MIT；上游 skill/rule 各自的授權放 upstream/licenses/
 +-- kit.py                   Agent 用的底層工具（子命令）：install / uninstall /
 |                            list-skills / import-skill / import-rule / import-mcp /
 |                            check-updates / diff / manifest / check-public /
@@ -195,3 +196,7 @@ repo 可公開，密鑰只放 gitignored 的 `config/secrets.env`，repo 內用 
 - Kiro 的 `fileMatchPattern`（glob rule）確切語法尚未確認，第一次裝 glob rule 時要驗證。
 - Antigravity 全域 always_on rule 共用 20,000 token 預算，超過會被降級為指標。rule 不要放太多常駐的。
 - `kit.py` 目標 Python 3.11+。尚未在實機 Windows 驗證（symlink 退回複製、各工具路徑），第一次在 Windows 用時要確認。
+
+## 授權
+
+MIT，見 `LICENSE`。從上游引入的 skill 與 rule 沿用各自的授權，授權檔在 `upstream/licenses/`。
