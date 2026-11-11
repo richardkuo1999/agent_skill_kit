@@ -17,15 +17,18 @@ from pathlib import Path
 
 import kitlib
 
+COPY_MARK = ".kit-installed"  # written into every copied skill dir; uninstall only removes marked dirs
+
 
 def _link_or_copy(src: Path, dest: Path, force_copy: bool) -> str:
     """Install one skill dir at dest. Returns 'link' or 'copy' (mode used).
     Default: try symlink, fall back to copy. --copy forces copy.
-    An existing non-symlink dest is left alone (caller reports SKIP)."""
+    An existing non-symlink dest is left alone (caller reports SKIP), unless it
+    carries COPY_MARK (kit's own earlier copy) and --copy is given."""
     if dest.is_symlink() or dest.exists():
         if dest.is_symlink():
             dest.unlink()
-        elif force_copy:
+        elif force_copy and (dest / COPY_MARK).is_file():
             shutil.rmtree(dest)
         else:
             return "skip"
@@ -36,6 +39,7 @@ def _link_or_copy(src: Path, dest: Path, force_copy: bool) -> str:
         except (OSError, NotImplementedError):
             pass  # no privilege (Windows) -> copy
     shutil.copytree(src, dest)
+    (dest / COPY_MARK).write_text("installed by agent_skill_kit\n", encoding="utf-8")
     return "copy"
 
 
@@ -106,10 +110,14 @@ def _install_rules(t, row, args, root, marker_line):
 
 
 def _install_mcp(targets, args, root):
+    """Returns True on success, False if any server was skipped for a missing
+    secret (so install can exit non-zero, per the README's 'errors out')."""
     import json
     mcp = kitlib.mcp_table()
     secrets = kitlib.load_secrets()
     srcs = sorted((root / "config" / "mcp").glob("*.json"))
+    ok = True
+    wrote_secret_to_project = False
     for t in dict.fromkeys(targets):
         if t not in mcp:
             continue  # tool has no MCP row; skip silently
@@ -132,19 +140,31 @@ def _install_mcp(targets, args, root):
             name = src.stem
             defn = json.loads(src.read_text(encoding="utf-8"))
             tgts = defn.pop("targets", "all")
+            # transport is kit metadata (see config/mcp/README.md), not a field
+            # the tools' MCP config understands — strip it before writing.
+            defn.pop("transport", None)
             if not _targets_tool(tgts, t):
                 print("SKIP {}: {} (targets={})".format(t, name, tgts)); continue
+            had_secret_ref = kitlib.has_secret_ref(defn)
             try:
                 defn = kitlib.substitute_secrets(defn, secrets)
             except KeyError as e:
                 print("ERROR {}: {} missing secret {} in config/secrets.env"
                       .format(t, name, e.args[0]), file=sys.stderr)
-                return
+                ok = False
+                break  # stop this tool; its later servers depend on nothing here
             if fmt == "json":
                 kitlib.merge_mcp_json(dest, container, name, defn)
             else:
                 kitlib.merge_mcp_toml(dest, container, name, defn)
+            if had_secret_ref and args.workspace:
+                wrote_secret_to_project = True
             print("OK   {}: {}".format(t, name))
+    if wrote_secret_to_project:
+        print("WARN: wrote real secret values into project-level MCP files. "
+              "Do NOT commit them — add these paths to the project's .gitignore.",
+              file=sys.stderr)
+    return ok
 
 
 def _fill_pilot(link, playbook_lines, copied):
@@ -220,33 +240,54 @@ def cmd_install(args: argparse.Namespace) -> int:
         if want_rules:
             _install_rules(t, row, args, root, marker_line)
 
+    mcp_ok = True
     if want_mcp:
-        _install_mcp(targets, args, root)
+        mcp_ok = _install_mcp(targets, args, root)
 
     if copied_any:
-        print("note: some skills were COPIED (no symlink privilege); "
-              "after `git pull` updates the kit, re-run install to refresh them.")
-    return 0
+        if args.copy:
+            print("note: skills were COPIED because you passed --copy; "
+                  "after `git pull` updates the kit, re-run install to refresh them.")
+        else:
+            print("note: some skills were COPIED (no symlink privilege); "
+                  "after `git pull` updates the kit, re-run install to refresh them.")
+    return 0 if mcp_ok else 1
 
 
-def _uninstall_skills(t, row, args, root, install_skills):
+def _skill_dir(row, args):
+    scope = row[2] if args.workspace else row[1]
+    if scope == "-":
+        return None
+    return (Path(args.workspace) / scope) if args.workspace else kitlib.expand(scope)
+
+
+def _uninstall_skills(t, row, args, root, install_skills, tools, targets):
     """Remove the skills install would place for this tool/profile. Only touches
-    what the kit owns: a symlink (always safe), or a copied dir whose name is in
-    the install set AND that carries a SKILL.md (so a stray user dir of the same
-    name with no SKILL.md is left alone). Never touches hand-made skills."""
+    what the kit owns: a symlink, or a copied dir carrying COPY_MARK. Hand-made
+    skills (no marker) are never removed. If another tool outside this run
+    shares the same skills dir, skip unless --force."""
     sg, sp = row[1], row[2]
     scope = sp if args.workspace else sg
     if scope == "-":
         print("SKIP {}: no skill support".format(t)); return
     dest_dir = (Path(args.workspace) / scope) if args.workspace else kitlib.expand(scope)
+    sharers = [o for o, orow in tools.items()
+               if o != t and o not in targets and _skill_dir(orow, args) == dest_dir]
+    if sharers and not args.force:
+        print("skip {}: {} is shared with {}; use --force to remove anyway".format(
+            t, dest_dir, ", ".join(sharers)))
+        return
     for name in install_skills:
         link = dest_dir / name
         if link.is_symlink():
             link.unlink()
             print("DEL  {}: {} (link)".format(t, name))
-        elif link.is_dir() and (link / "SKILL.md").is_file():
+        elif link.is_dir() and (link / COPY_MARK).is_file():
             shutil.rmtree(link)
             print("DEL  {}: {} (copy)".format(t, name))
+        elif link.is_dir():
+            print("KEEP {}: {} (no {} marker: hand-written or installed by an older kit)".format(
+                t, name, COPY_MARK))
         else:
             print("skip {}: {} (not installed)".format(t, name))
 
@@ -330,7 +371,7 @@ def cmd_uninstall(args) -> int:
     for t in dict.fromkeys(targets):
         row = tools[t]
         if want_skills:
-            _uninstall_skills(t, row, args, root, install_skills)
+            _uninstall_skills(t, row, args, root, install_skills, tools, targets)
         if want_rules:
             _uninstall_rules(t, row, args, root)
     if want_mcp:
@@ -412,18 +453,25 @@ def cmd_profiles(args) -> int:
 
 
 def cmd_list(args) -> int:
-    """List what the kit has installed for one tool: skills (symlink or kit-owned
-    copy), kit rules (A-class marked files / B-class block) and MCP servers.
-    Read-only; inspects the tool's live install locations."""
+    """List what the kit has installed for one tool (or 'all'): skills (symlink
+    or kit-owned copy), kit rules (A-class marked files / B-class block) and MCP
+    servers. Read-only; inspects the tool's live install locations."""
     tools = kitlib.tools_table()
     mcp = kitlib.mcp_table()
-    t = args.tool
-    if t not in tools:
-        print("unknown tool: {} (known: {})".format(t, " ".join(tools)), file=sys.stderr)
+    try:
+        targets = kitlib.resolve_targets(tools, args.tool)
+    except ValueError as e:
+        print(e, file=sys.stderr)
         return 1
     root = kitlib.kit_root()
-    row = tools[t]
+    for i, t in enumerate(targets):
+        if i:
+            print()
+        _list_one(t, tools[t], mcp, args, root)
+    return 0
 
+
+def _list_one(t, row, mcp, args, root):
     scope = row[2] if args.workspace else row[1]
     print("== {} ({})".format(t, "project" if args.workspace else "global"))
     print("skills:")
@@ -487,7 +535,6 @@ def cmd_list(args) -> int:
                     print("  {}{}".format(s, "  (kit)" if s in kit_names else ""))
             else:
                 print("  (none)")
-    return 0
 
 
 def cmd_status(args) -> int:
@@ -572,6 +619,7 @@ def cmd_manifest(args) -> int:
     tool_sep = "---|" if with_tool else ""
 
     out.append("## Playbooks（多步工作流）")
+    missing_pb = []
     if prof_playbooks:
         for ln in prof_playbooks:
             sep = " -> " if " -> " in ln else ("→" if "→" in ln else None)
@@ -579,6 +627,8 @@ def cmd_manifest(args) -> int:
             fname = fname.strip()
             if fname and not fname.startswith("playbooks/"):
                 fname = "playbooks/" + fname
+            if fname and not (root / "skills" / "pilot" / fname).is_file():
+                missing_pb.append(fname)
             out.append("### {} — {}".format(fname.replace("playbooks/", "").replace(".md", ""),
                                              when.strip()))
             out.append("<!-- flow: 由 agent 補一個 Mermaid 流程圖，讀 skills/pilot/{} 的步驟 -->".format(fname))
@@ -606,6 +656,9 @@ def cmd_manifest(args) -> int:
     dest.write_text("\n".join(out) + "\n", encoding="utf-8")
     print("wrote {} (profile {}): {} playbooks, {} skills, {} rules"
           .format(dest, profile, len(prof_playbooks), len(prof_skills), len(rule_rows)))
+    if missing_pb:
+        print("WARN: profile routes to playbook file(s) that do not exist under "
+              "skills/pilot/: {}".format(", ".join(missing_pb)), file=sys.stderr)
     print("next: have the agent fill each <!-- flow --> with a Mermaid diagram.")
     return 0
 
@@ -642,8 +695,12 @@ def cmd_list_skills(args) -> int:
             print("no skills_dir {} in {}@{}".format(skills_dir, repo, ref[:9]),
                   file=sys.stderr)
             return 1
-        found = sorted(d.name for d in base.iterdir()
-                       if d.is_dir() and (d / "SKILL.md").is_file())
+        # Skills may sit one level deep (pstack: skills/unslop) or in category
+        # subdirs (mattpocock: skills/engineering/tdd), so find every SKILL.md
+        # at any depth. The name is its path relative to skills_dir — exactly
+        # what `import-skill <source> <path>` takes.
+        found = sorted(str(p.parent.relative_to(base)).replace(os.sep, "/")
+                       for p in base.rglob("SKILL.md") if p.is_file())
         if not found:
             print("no skills (dirs with SKILL.md) under {}".format(skills_dir))
             return 0
@@ -808,22 +865,37 @@ def cmd_check_updates(args) -> int:
     return 0
 
 
+def _tree_blobs(repo, ref, prefix):
+    """{path: blob_sha} for every file under prefix in repo@ref, via one tree
+    read. Independent of the compare API's 300-file page limit."""
+    out = {}
+    for e in kitlib._gh_tree_entries(repo, ref):
+        if e.get("type") == "blob" and e["path"].startswith(prefix):
+            out[e["path"]] = e["sha"]
+    return out
+
+
 def _skill_changed(repo, base, head, sdir, path):
     """True if any file under <sdir>/<path>/ differs between base and head.
-    Uses the compare API; on its pagination/limits, falls back to comparing the
-    SKILL.md blob sha (a change there is the common case)."""
+    Prefer the compare API (one call), but its file list is capped at 300, so a
+    full (non-truncated) list is only trustworthy when it is a NEGATIVE: if no
+    listed file touches our prefix AND the list was not truncated, nothing
+    changed. Otherwise (our prefix appears, or the list hit the cap and might
+    hide our prefix) fall back to comparing the skill dir's blob shas by tree."""
     import json, urllib.error
     prefix = "{}/{}/".format(sdir, path)
     try:
         d = json.load(kitlib._gh_get("{}/repos/{}/compare/{}...{}".format(kitlib._GH, repo, base, head)))
         files = [f["filename"] for f in (d.get("files") or [])]
-        if files:
-            return any(fn.startswith(prefix) for fn in files)
+        if any(fn.startswith(prefix) for fn in files):
+            return True
+        # no match: trust it only if the list was complete (< 300 cap)
+        if len(files) < 300:
+            return False
     except urllib.error.HTTPError:
         pass
-    a = kitlib.gh_blob_sha(repo, base, prefix + "SKILL.md")
-    b = kitlib.gh_blob_sha(repo, head, prefix + "SKILL.md")
-    return a != b
+    # truncated list or compare failed: compare the skill dir by tree blob shas
+    return _tree_blobs(repo, base, prefix) != _tree_blobs(repo, head, prefix)
 
 
 def cmd_check_public(args) -> int:
@@ -1094,7 +1166,7 @@ def main(argv=None) -> int:
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="cmd")
 
-    pi = sub.add_parser("install", help="install skills (rules/mcp: later batch)")
+    pi = sub.add_parser("install", help="install skills, rules and MCP into a tool")
     pi.add_argument("target", nargs="+", help="tool name(s) from config/tools.tsv, or 'all'")
     pi.add_argument("--workspace", help="install into DIR's project-level folders")
     pi.add_argument("--only", action="append", choices=["skills", "rules", "mcp"],
@@ -1111,6 +1183,8 @@ def main(argv=None) -> int:
                     help="uninstall just one kind (repeatable)")
     pu.add_argument("--profile", default="default",
                     help="which profile's skills to remove (matches the install profile)")
+    pu.add_argument("--force", action="store_true",
+                    help="remove skills even if another tool shares the same skills dir")
     pu.set_defaults(func=cmd_uninstall)
 
     pls = sub.add_parser("list-skills", help="list a source's skills + descriptions")
@@ -1170,7 +1244,7 @@ def main(argv=None) -> int:
     pst = sub.add_parser("status", help="overview of local content, sources, profiles")
     pst.set_defaults(func=cmd_status)
 
-    # setup = install (skills+rules+mcp in one run); alias for the bash setup.sh habit
+    # setup = install (skills+rules+mcp in one run); kept as a familiar alias
     psetup = sub.add_parser("setup", help="install everything (alias of install)")
     psetup.add_argument("target", nargs="+")
     psetup.add_argument("--workspace")

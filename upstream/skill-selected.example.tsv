@@ -1,5 +1,5 @@
-# EXAMPLE ONLY — not read by any script. Shows the format of skill-selected.tsv.
-# import-skill.sh writes one row here per imported skill.
+# EXAMPLE ONLY — not read by kit.py. Shows the format of skill-selected.tsv.
+# `kit.py import-skill` writes one row here per imported skill.
 # Columns: source	upstream_path (relative to skills_dir)	local_name	imported_sha
 # source       = a name from skill-sources.tsv
 # upstream_path = the skill's folder under skills_dir (the part before /SKILL.md)

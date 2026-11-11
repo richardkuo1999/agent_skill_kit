@@ -73,13 +73,14 @@ stays. Confirm which tool/project first, then:
 ## import-mcp — add an MCP server definition
 
 Triggered by "加一個 MCP server". Turn what the user describes into
-`config/mcp/<name>.json`. Simple stdio/remote server via convenience flags; anything
-whose args start with `-`, or a nested object, via `--json`:
+`config/mcp/<name>.json`. Prefer `--json` (handles args that start with `-`, which
+`--arg` cannot — argparse reads `--arg -y` as a flag). The convenience flags suit a
+server with no dash-leading args:
 
 ```
-python kit.py import-mcp <name> --command npx --arg -y --arg <server> --env TOKEN=${KIT_SECRET:X}
+python kit.py import-mcp <name> --json '{"command":"npx","args":["-y","<server>"],"env":{"TOKEN":"${KIT_SECRET:X}"}}'
+python kit.py import-mcp <name> --command some-bin --arg run --env TOKEN=${KIT_SECRET:X}
 python kit.py import-mcp <name> --url https://... --targets kiro,cursor
-python kit.py import-mcp <name> --json '{"command":"uvx","args":["-y","srv"]}'
 ```
 
 Secrets go in as `${KIT_SECRET:NAME}`; remind the user to add the real value to

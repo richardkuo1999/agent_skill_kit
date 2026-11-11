@@ -1,5 +1,5 @@
-# EXAMPLE ONLY — not read by any script. Shows the format of rule-selected.tsv.
-# import-rule.sh writes one row here per imported rule.
+# EXAMPLE ONLY — not read by kit.py. Shows the format of rule-selected.tsv.
+# `kit.py import-rule` writes one row here per imported rule.
 # Columns: source	upstream_file_path	local_name	kit_load	imported_sha
 # source            = a name from rule-sources.tsv
 # upstream_file_path = exact file path in the repo (a SKILL.md, an AGENTS.md, ...)

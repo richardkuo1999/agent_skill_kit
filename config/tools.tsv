@@ -6,7 +6,7 @@
 #   rule_class    A = folder of per-rule files | B = single merged file
 #   rule_global   A: global rule dir | B: global single file | '-' if no file-based global
 #   rule_project  A: project rule dir | B: project single file
-#   rule_fmt      converter function in scripts/lib/tools.sh (A class only; '-' for B)
+#   rule_fmt      converter name in kitlib.py FMT (A class only; '-' for B)
 #   rule_ext      extension for installed rule files (md, mdc, ...)
 #   doc_url       official doc page, entry point for the tools-sync skill
 # ~ expands to $HOME. --workspace DIR overrides the *_project paths' base.

@@ -90,9 +90,11 @@ python kit.py profiles                           # 列有哪些 profile
 python kit.py status                             # 本地 skill/rule/MCP、上游來源、profile 總覽
 ```
 
-`uninstall` 是 install 的反向：只移除 kit 裝的東西（符號連結、含 kit 標記的 rule 檔、kit 的 MCP server 條目），手寫的 skill 與 rule、你自己的其他 MCP server 都不碰。參數與 install 相同（`--workspace`、`--only`、`--profile`），用相同 profile 才能對準當初裝的那組。
+`uninstall` 是 install 的反向：只移除 kit 裝的東西（符號連結、含 kit 標記的 rule 檔、kit 的 MCP server 條目），手寫的 skill 與 rule、你自己的其他 MCP server 都不碰。參數與 install 相同（`--workspace`、`--only`、`--profile`），用相同 profile 才能對準當初裝的那組。`--copy` 裝的 skill 目錄內有 `.kit-installed` 標記，沒有標記的目錄一律保留。若 antigravity 與 codex 共用 `.agents/skills`，只移除其中一個時會跳過並提示，加 `--force` 才移除。
 
-裝哪些 skill 由 profile 決定（`skills/profiles/<name>.txt`，預設 `default`）。清單分兩段：`[skills]` 列要裝到工具的 skill，`[playbooks]` 列要填進 pilot 路由表的 playbook。沒列到的不裝，所以 kit 自己的機制 skill（kitpilot、curate、tools-sync）不會洩漏進工具。入口 `pilot` 一律裝。複製 `default.txt` 成 `web.txt` 之類即可為不同 workspace 準備不同組，用 `--profile web` 選用。pilot 的路由表因 profile 而異，所以帶自訂路由表的 pilot 需搭 `--copy`。
+裝哪些 skill 由 profile 決定（`skills/profiles/<name>.txt`，預設 `default`）。清單分兩段：`[skills]` 列要裝到工具的 skill，`[playbooks]` 列要填進 pilot 路由表的 playbook。沒列到的不裝，所以 kit 自己的機制 skill（kitpilot、curate、tools-sync）不會洩漏進工具。入口 `pilot` 一律裝。複製 `default.txt` 成 `web.txt` 之類即可為不同 workspace 準備不同組，用 `--profile web` 選用。
+
+profile 只管 skill 和 playbook，**不管 rule**：`rules/` 裡的 rule 會全部裝進每個安裝目標，不受 profile 篩選。pilot 的路由表因 profile 而異，而符號連結的 pilot 指回 repo 無法逐 profile 不同，所以**不加 `--copy` 時 pilot 路由表是空的、任何 playbook 都不會路由**；要 profile 專屬的 pilot 路由，install 時加 `--copy`。
 
 skill 預設符號連結，`git pull` 即同步。symlink 建不了（如 Windows 無權限）自動退回複製，更新要重跑 install；`--copy` 可強制複製。rule 轉格式後產生檔案，改了要重跑 install。
 
@@ -125,7 +127,7 @@ skill 預設符號連結，`git pull` 即同步。symlink 建不了（如 Window
 
 MCP server 定義放 `config/mcp/<name>.json`（工具無關），install 時轉成各工具格式並合併進既有設定檔，保留你其餘的 server。密鑰用 `${KIT_SECRET:NAME}` 引用，真值放 gitignored 的 `config/secrets.env`（範本 `secrets.env.example`），安裝時代入；缺 key 報錯中止。這讓 repo 可安全公開。
 
-定義檔可手寫，也可用 `python kit.py import-mcp <name>` 產生。便捷寫法 `--command npx --arg -y --arg 某server --env TOKEN=${KIT_SECRET:X}`；若 arg 以 `-` 開頭（argparse 會當成選項），改用 `--json '<整段物件>'`。遠端 server 用 `--url`。寫檔不動工具，之後 `install` 才生效。
+定義檔可手寫，也可用 `python kit.py import-mcp <name>` 產生。最穩的寫法是 `--json '{"command":"npx","args":["-y","某server"],"env":{"TOKEN":"${KIT_SECRET:X}"}}'`，它能處理以 `-` 開頭的 arg。便捷旗標 `--command/--arg/--env` 只適合沒有 `-` 開頭 arg 的 server（argparse 會把 `--arg -y` 當成選項）。遠端 server 用 `--url`。寫檔不動工具，之後 `install` 才生效。
 
 工具清單在 `config/tools.tsv`，加新工具就是加一列（見 `docs/multi-tool-design.md`）。路徑特例見上方表格腳註。
 

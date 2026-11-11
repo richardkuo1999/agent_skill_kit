@@ -1,11 +1,12 @@
 # Python dependencies for agent_skill_kit.
 #
-# Only Codex MCP support needs Python: its config is TOML, which the install
-# scripts read and write with this module. Everything else (skills, rules, JSON
-# MCP) uses shell + jq and needs no Python package.
+# kit.py and kitlib.py are pure Python (stdlib only) for skills, rules and JSON
+# MCP. The ONE optional dependency is for Codex MCP support, whose config is
+# TOML: on Python 3.11+ it is read with stdlib tomllib and written with this
+# package; on older Python (tested down to 3.6) this package does both.
 #
-# Python 3.6+ (on 3.6 there is no stdlib tomllib, so the third-party `toml`
-# package is used for both read and write).
+# So: if you never install Codex MCP, you need no package at all. If you do,
+# install this. On 3.11+ it is only needed for the write side.
 # Install:  pip install -r requirements.txt
 #
 # Pinned to a verified version. Bump deliberately.

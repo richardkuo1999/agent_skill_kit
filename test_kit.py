@@ -90,11 +90,14 @@ def main():
             p = home / rel
             check(p.exists() or p.is_symlink(), "skill present: " + rel)
 
-        # rules A-class frontmatter
-        check("inclusion: always" in (home / ".kiro/steering/smoke-always.md").read_text(),
-              "kiro rule inclusion")
-        check("trigger: always_on" in (home / ".gemini/config/rules/smoke-always.md").read_text(),
-              "antigravity rule trigger")
+        # rules A-class frontmatter. Front-matter must be line 1 (a leading
+        # marker comment makes Kiro/Antigravity ignore it and default to always).
+        kiro_rule = (home / ".kiro/steering/smoke-always.md").read_text()
+        ag_rule = (home / ".gemini/config/rules/smoke-always.md").read_text()
+        check("inclusion: always" in kiro_rule, "kiro rule inclusion")
+        check("trigger: always_on" in ag_rule, "antigravity rule trigger")
+        check(kiro_rule.startswith("---"), "kiro rule frontmatter at line 1")
+        check(ag_rule.startswith("---"), "antigravity rule frontmatter at line 1")
 
         # rules B-class merge: always in, glob out
         claude = (home / ".claude/CLAUDE.md").read_text()
@@ -192,6 +195,24 @@ def main():
         check((home / ".cursor/skills/smoke-skill").exists()
               or (home / ".cursor/skills/smoke-skill").is_symlink(),
               "uninstall left other tool alone")
+
+        # U4/U8/U9: copy marker + shared dir
+        proj = sb / "proj"; proj.mkdir()
+        hw = proj / ".agents/skills/smoke-skill"; hw.mkdir(parents=True)
+        (hw / "SKILL.md").write_text("hand")
+        run(sb, home, "install", "codex", "--workspace", str(proj), "--profile", "smoke", "--only", "skills", "--copy")
+        check((hw / "SKILL.md").read_text() == "hand" and not (hw / ".kit-installed").exists(),
+              "--copy does not overwrite hand-written skill")
+        run(sb, home, "install", "codex", "--workspace", str(proj), "--profile", "smoke", "--only", "skills", "--copy")
+        check((proj / ".agents/skills/pilot/.kit-installed").is_file(), "copy writes marker")
+        run(sb, home, "uninstall", "codex", "antigravity", "--workspace", str(proj), "--profile", "smoke", "--only", "skills")
+        check((hw / "SKILL.md").exists(), "uninstall keeps unmarked hand-written skill")
+        check(not (proj / ".agents/skills/pilot").exists(), "uninstall removed marked copy")
+        run(sb, home, "install", "codex", "--workspace", str(proj), "--profile", "smoke", "--only", "skills", "--copy")
+        run(sb, home, "uninstall", "codex", "--workspace", str(proj), "--profile", "smoke", "--only", "skills")
+        check((proj / ".agents/skills/pilot").exists(), "uninstall skips dir shared with antigravity")
+        run(sb, home, "uninstall", "codex", "--workspace", str(proj), "--profile", "smoke", "--only", "skills", "--force")
+        check(not (proj / ".agents/skills/pilot").exists(), "--force removes shared dir")
 
         # uninstall B-class: strips kit block, keeps user text
         claude_p = home / ".claude/CLAUDE.md"
