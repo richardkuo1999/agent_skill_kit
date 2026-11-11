@@ -287,6 +287,15 @@ def _skill_dir(row, args):
     return (Path(args.workspace) / scope) if args.workspace else kitlib.expand(scope)
 
 
+def _is_kit_link(link, kit_skills):
+    """True if a symlink resolves into the kit's skills/ (installed by the kit)."""
+    try:
+        link.resolve().relative_to(kit_skills)
+        return True
+    except ValueError:
+        return False
+
+
 def _uninstall_skills(t, row, args, root, install_skills, tools, targets):
     """Remove the skills the kit installed for this tool. Scans the skills dir;
     kit-owned = a symlink resolving into the kit's skills/, or a copied dir
@@ -307,25 +316,37 @@ def _uninstall_skills(t, row, args, root, install_skills, tools, targets):
     if not dest_dir.is_dir():
         print("skip {}: {} (not installed)".format(t, dest_dir)); return
     kit_skills = (root / "skills").resolve()
-    removed = False
+    owned, unmanaged = [], []
     for link in sorted(dest_dir.iterdir()):
         name = link.name
-        if install_skills is not None and name not in install_skills:
-            continue
+        in_scope = install_skills is None or name in install_skills
         if link.is_symlink():
-            try:
-                link.resolve().relative_to(kit_skills)
-            except ValueError:
-                print("KEEP {}: {} (link points outside the kit)".format(t, name)); continue
-            link.unlink()
-            print("DEL  {}: {} (link)".format(t, name)); removed = True
+            if _is_kit_link(link, kit_skills):
+                owned.append(link)
+            elif in_scope:
+                print("KEEP {}: {} (link points outside the kit)".format(t, name))
         elif link.is_dir() and (link / COPY_MARK).is_file():
+            owned.append(link)
+        elif link.is_dir() and (link / "SKILL.md").is_file():
+            unmanaged.append(name)
+    to_remove = [l for l in owned if install_skills is None or l.name in install_skills]
+    # pilot is the routing entry for every other kit skill: keep it while any remain.
+    rest = [l.name for l in owned if l not in to_remove]
+    if rest and any(l.name == "pilot" for l in to_remove):
+        to_remove = [l for l in to_remove if l.name != "pilot"]
+        print("KEEP {}: pilot (still used by {})".format(t, ", ".join(rest)))
+    for link in to_remove:
+        if link.is_symlink():
+            link.unlink()
+            print("DEL  {}: {} (link)".format(t, link.name))
+        else:
             shutil.rmtree(link)
-            print("DEL  {}: {} (copy)".format(t, name)); removed = True
-        elif link.is_dir() and install_skills is not None:
-            print("KEEP {}: {} (no {} marker: hand-written or installed by an older kit)".format(
-                t, name, COPY_MARK))
-    if not removed:
+            print("DEL  {}: {} (copy)".format(t, link.name))
+    shown = [n for n in unmanaged if install_skills is None or n in install_skills]
+    if shown:
+        print("KEEP {}: {} (no {} marker: hand-written or installed by an older kit)".format(
+            t, ", ".join(shown), COPY_MARK))
+    if not to_remove:
         print("skip {}: no kit-installed skills in {}".format(t, dest_dir))
 
 
@@ -359,7 +380,8 @@ def _uninstall_rules(t, row, args, root):
             print("skip {}: no kit block in {}".format(t, dest.name))
 
 
-def _uninstall_mcp(targets, args, root):
+def _uninstall_mcp(targets, args, root) -> bool:
+    ok = True
     mcp = kitlib.mcp_table()
     srcs = sorted((root / "config" / "mcp").glob("*.json"))
     names = [s.stem for s in srcs]
@@ -378,11 +400,13 @@ def _uninstall_mcp(targets, args, root):
                 removed = unmerge(dest, container, name)
             except kitlib.MissingToml as e:
                 print("ERROR {}: {}".format(t, e), file=sys.stderr)
+                ok = False
                 break
             if removed:
                 print("DEL  {}: {}".format(t, name))
             else:
                 print("skip {}: {} (not in {})".format(t, name, dest.name))
+    return ok
 
 
 def _rmdir_empty(targets, tools, args):
@@ -448,10 +472,9 @@ def cmd_uninstall(args) -> int:
             _uninstall_skills(t, row, args, root, install_skills, tools, targets)
         if want_rules:
             _uninstall_rules(t, row, args, root)
-    if want_mcp:
-        _uninstall_mcp(targets, args, root)
+    mcp_ok = _uninstall_mcp(targets, args, root) if want_mcp else True
     _rmdir_empty(targets, tools, args)
-    return 0
+    return 0 if mcp_ok else 1
 
 
 def cmd_import_mcp(args) -> int:
@@ -558,7 +581,11 @@ def _list_one(t, row, mcp, args, root):
         if sdir.is_dir():
             for d in sorted(sdir.iterdir()):
                 if d.is_symlink():
-                    print("  {:<24} link -> {}".format(d.name, os.readlink(str(d)))); found = True
+                    if _is_kit_link(d, (root / "skills").resolve()):
+                        print("  {:<24} link -> {}".format(d.name, os.readlink(str(d))))
+                    else:
+                        print("  {:<24} unmanaged (link points outside the kit)".format(d.name))
+                    found = True
                 elif d.is_dir() and (d / COPY_MARK).is_file():
                     print("  {:<24} copy".format(d.name)); found = True
                 elif d.is_dir() and (d / "SKILL.md").is_file():
@@ -605,9 +632,15 @@ def _list_one(t, row, mcp, args, root):
                     servers = list(json.loads(mdest.read_text(encoding="utf-8"))
                                    .get(container, {}))
                 else:
-                    servers = list(kitlib._load_toml(mdest).get(container, {}))
+                    try:
+                        servers = list(kitlib._load_toml(mdest).get(container, {}))
+                    except kitlib.MissingToml as e:
+                        print("  ERROR: {}".format(e), file=sys.stderr)
+                        servers = None
             kit_names = {s.stem for s in (root / "config" / "mcp").glob("*.json")}
-            if servers:
+            if servers is None:
+                pass  # error already printed
+            elif servers:
                 for s in sorted(servers):
                     print("  {}{}".format(s, "  (kit)" if s in kit_names else ""))
             else:

@@ -60,6 +60,11 @@ def _out(sandbox, home, *args):
 
 
 def main():
+    try:
+        import toml  # noqa: F401  (the Codex MCP checks write TOML)
+    except ImportError:
+        print("test_kit.py needs the 'toml' package for the Codex MCP checks: pip install toml")
+        return 2
     work = Path(tempfile.mkdtemp())
     try:
         sb = work / "kit"
@@ -246,6 +251,40 @@ def main():
         out_nt = r_nt.stdout.decode("utf-8", "ignore")
         check(r_nt.returncode != 0 and "pip install toml" in out_nt and "Traceback" not in out_nt,
               "missing toml package gives a clear error")
+        # M1/M2: without the toml package, uninstall exits non-zero and list prints no traceback
+        pt = sb / "projM1"; pt.mkdir()
+        run(sb, home, "install", "codex", "--workspace", str(pt), "--profile", "smoke", "--only", "mcp")
+        def _no_toml(*argv):
+            r = subprocess.run(
+                [PY, "-c", "import sys; sys.modules['toml']=None; sys.modules['tomllib']=None; "
+                 "import kit; sys.exit(kit.main(%r))" % (list(argv),)],
+                cwd=str(sb), env=dict(os.environ, HOME=str(home)),
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            return r.returncode, r.stdout.decode("utf-8", "ignore")
+        rc_u, out_u = _no_toml("uninstall", "codex", "--workspace", str(pt), "--only", "mcp")
+        check(rc_u != 0 and "pip install toml" in out_u, "uninstall without toml exits non-zero (M1)")
+        rc_l, out_l = _no_toml("list", "codex", "--workspace", str(pt))
+        check("Traceback" not in out_l and "pip install toml" in out_l, "list without toml has no traceback (M2)")
+        # M4/M5/M6: link ownership in list, KEEP summary, pilot kept while other kit skills remain
+        p6 = sb / "proj6"; sd6 = p6 / ".cursor/skills"; sd6.mkdir(parents=True)
+        (sb / "skills/other-skill").mkdir(); (sb / "skills/other-skill/SKILL.md").write_text("o")
+        (sd6 / "mine").mkdir(); (sd6 / "mine/SKILL.md").write_text("hand")
+        outside6 = sb / "outside6"; outside6.mkdir()
+        (sd6 / "foreign").symlink_to(outside6, target_is_directory=True)
+        run(sb, home, "install", "cursor", "--workspace", str(p6), "--profile", "smoke", "--only", "skills")
+        (sd6 / "other-skill").symlink_to(sb / "skills/other-skill", target_is_directory=True)
+        lst = _out(sb, home, "list", "cursor", "--workspace", str(p6))
+        check("foreign" in lst and "unmanaged (link points outside the kit)" in lst,
+              "list marks a link outside the kit as unmanaged (M4)")
+        run(sb, home, "uninstall", "cursor", "--workspace", str(p6), "--profile", "smoke", "--only", "skills")
+        check(not (sd6 / "smoke-skill").is_symlink() and (sd6 / "pilot").is_symlink()
+              and (sd6 / "other-skill").is_symlink(),
+              "--profile keeps pilot while other kit skills remain (M6)")
+        out6 = _out(sb, home, "uninstall", "cursor", "--workspace", str(p6), "--only", "skills")
+        check(not (sd6 / "pilot").is_symlink() and not (sd6 / "other-skill").is_symlink()
+              and "mine" in out6 and "KEEP" in out6,
+              "no --profile removes all kit skills and reports kept ones (M5)")
+        shutil.rmtree(sb / "skills/other-skill")
         # N6: a server with a missing secret is skipped; the others still install
         nosec = sb / "config/mcp/aaa-nosecret.json"
         nosec.write_text(json.dumps({"command": "x", "env": {"T": "${KIT_SECRET:NOPE_X}"}}))
