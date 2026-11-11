@@ -80,7 +80,8 @@ on each: adopt / merge / replace / compose / skip / defer.
   the user what changed.
 
 After applying upstream items, append each adopted/merged/replaced/skipped new skill
-to `upstream/skill-reviewed.txt` as `<source> <upstream_path>` so the next check stops
+to `upstream/skill-reviewed.txt` (personal, gitignored; create it from
+`skill-reviewed.example.txt` if missing) as `<source> <upstream_path>` so the next check stops
 listing it. Leave deferred ones out.
 
 ## Step 3 — Maintain downstream

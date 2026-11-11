@@ -9,3 +9,6 @@ config/secrets.env
 # Generated per-user map (kit.py manifest). It reflects one user's own profile,
 # so the template repo does not carry it; your own fork may commit it if you like.
 skills/pilot/MANIFEST.md
+
+# Your own record of reviewed upstream skills (see upstream/skill-reviewed.example.txt).
+upstream/skill-reviewed.txt

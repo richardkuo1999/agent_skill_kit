@@ -58,7 +58,7 @@ agent_skill_kit/
 +-- upstream/
 |   +-- skill-sources.tsv    skill 上游來源（repo、分支、skill 目錄）
 |   +-- skill-selected.tsv   已引入 skill 與引入時的 commit
-|   +-- skill-reviewed.txt   已檢視過的上游 skill（偵測新增用）
+|   +-- skill-reviewed.txt   已檢視過的上游 skill（個人紀錄，不進版控；範本 skill-reviewed.example.txt）
 |   +-- rule-sources.tsv     rule 上游來源（repo、分支）
 |   +-- rule-selected.tsv    已引入 rule、來源檔路徑、載入模式、commit
 |   +-- *.example.tsv        格式範例，程式不讀，照格式填真檔用

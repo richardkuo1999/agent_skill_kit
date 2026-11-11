@@ -1,0 +1,4 @@
+# <source> <upstream_path>  -- one per line (space-separated)
+# Upstream skills you have already looked at. check-updates lists only skills missing here.
+# Copy to skill-reviewed.txt (gitignored, personal). A missing file means nothing is reviewed yet.
+# mattpocock engineering/tdd
