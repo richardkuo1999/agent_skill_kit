@@ -189,8 +189,20 @@ def main():
               "uninstall removed pilot")
         check(not (home / ".kiro/steering/smoke-always.md").exists(),
               "uninstall removed A-class rule")
-        km2 = json.loads((home / ".kiro/settings/mcp.json").read_text()).get("mcpServers", {})
+        mp = home / ".kiro/settings/mcp.json"
+        km2 = json.loads(mp.read_text()).get("mcpServers", {}) if mp.exists() else {}
         check("smoke" not in km2 and "fromcli" not in km2, "uninstall removed mcp servers")
+        check(not mp.exists() and not (home / ".kiro/steering").exists()
+              and not (home / ".kiro/skills").exists(),
+              "uninstall removed emptied mcp file and empty dirs")
+        # a non-empty file/dir is kept
+        mp.parent.mkdir(parents=True, exist_ok=True)
+        mp.write_text(json.dumps({"mcpServers": {"mine": {"command": "x"}}, "other": 1}))
+        run(sb, home, "install", "kiro", "--profile", "smoke", "--only", "mcp")
+        run(sb, home, "uninstall", "kiro", "--profile", "smoke", "--only", "mcp")
+        kept = json.loads(mp.read_text())
+        check(kept.get("other") == 1 and "mine" in kept.get("mcpServers", {}),
+              "uninstall keeps user's own servers and fields")
         # other tools untouched by a single-tool uninstall
         check((home / ".cursor/skills/smoke-skill").exists()
               or (home / ".cursor/skills/smoke-skill").is_symlink(),

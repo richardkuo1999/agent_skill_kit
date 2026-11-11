@@ -343,6 +343,30 @@ def _uninstall_mcp(targets, args, root):
                 print("skip {}: {} (not in {})".format(t, name, dest.name))
 
 
+def _rmdir_empty(targets, tools, args):
+    """Remove skill/rule dirs that uninstall left empty. rmdir fails on a
+    non-empty dir, so user content is never touched. ponytail: cannot tell a
+    kit-created empty dir from a pre-existing empty one; both are removed."""
+    mcp = kitlib.mcp_table()
+    for t in dict.fromkeys(targets):
+        row = tools[t]
+        scopes = [row[2] if args.workspace else row[1],
+                  row[5] if args.workspace else row[4]]
+        if t in mcp:
+            scopes.append(mcp[t][2] if args.workspace else mcp[t][1])
+        for sc in scopes:
+            if sc == "-":
+                continue
+            d = (Path(args.workspace) / sc) if args.workspace else kitlib.expand(sc)
+            if d.suffix:  # a file path (e.g. CLAUDE.md, mcp.json): clean its parent
+                d = d.parent
+            try:
+                d.rmdir()
+                print("DEL  {}: empty dir {}".format(t, d))
+            except OSError:
+                pass
+
+
 def cmd_uninstall(args) -> int:
     """Reverse of install: remove the skills, rules and MCP servers install would
     place for the given tools/profile. Only removes what the kit owns; never
@@ -376,6 +400,7 @@ def cmd_uninstall(args) -> int:
             _uninstall_rules(t, row, args, root)
     if want_mcp:
         _uninstall_mcp(targets, args, root)
+    _rmdir_empty(targets, tools, args)
     return 0
 
 

@@ -338,6 +338,9 @@ def unmerge_mcp_json(dest: Path, container: str, name: str) -> bool:
     del servers[name]
     if not servers:
         del data[container]
+    if not data:
+        dest.unlink()  # the file held only kit servers
+        return True
     dest.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
     return True
 
@@ -352,6 +355,9 @@ def unmerge_mcp_toml(dest: Path, prefix: str, name: str) -> bool:
     del servers[name]
     if not servers:
         del data[prefix]
+    if not data:
+        dest.unlink()  # the file held only kit servers
+        return True
     _dump_toml(dest, data)
     return True
 
