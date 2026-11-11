@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""agent_skill_kit — cross-platform installer/manager (Python 3.11+).
+"""agent_skill_kit — cross-platform installer/manager (Python 3.6+).
 
 Single entry point with git-style subcommands: install / uninstall / list-skills /
 import-skill / import-rule / import-mcp / check-updates / diff / manifest /
@@ -153,10 +153,15 @@ def _install_mcp(targets, args, root):
                       .format(t, name, e.args[0]), file=sys.stderr)
                 ok = False
                 continue  # skip only this server; the others do not need this secret
-            if fmt == "json":
-                kitlib.merge_mcp_json(dest, container, name, defn)
-            else:
-                kitlib.merge_mcp_toml(dest, container, name, defn)
+            try:
+                if fmt == "json":
+                    kitlib.merge_mcp_json(dest, container, name, defn)
+                else:
+                    kitlib.merge_mcp_toml(dest, container, name, defn)
+            except kitlib.MissingToml as e:
+                print("ERROR {}: {}".format(t, e), file=sys.stderr)
+                ok = False
+                break  # every remaining server for this tool needs the same package
             if had_secret_ref and args.workspace:
                 wrote_secret_to_project = True
             print("OK   {}: {}".format(t, name))
@@ -369,7 +374,12 @@ def _uninstall_mcp(targets, args, root):
         dest = (Path(args.workspace) / scope) if args.workspace else kitlib.expand(scope)
         for name in names:
             unmerge = kitlib.unmerge_mcp_json if fmt == "json" else kitlib.unmerge_mcp_toml
-            if unmerge(dest, container, name):
+            try:
+                removed = unmerge(dest, container, name)
+            except kitlib.MissingToml as e:
+                print("ERROR {}: {}".format(t, e), file=sys.stderr)
+                break
+            if removed:
                 print("DEL  {}: {}".format(t, name))
             else:
                 print("skip {}: {} (not in {})".format(t, name, dest.name))

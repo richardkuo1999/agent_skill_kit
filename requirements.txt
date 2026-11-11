@@ -3,7 +3,7 @@
 # kit.py and kitlib.py are pure Python (stdlib only) for skills, rules and JSON
 # MCP. The ONE optional dependency is for Codex MCP support, whose config is
 # TOML: on Python 3.11+ it is read with stdlib tomllib and written with this
-# package; on older Python (tested down to 3.6) this package does both.
+# package; on older Python this package does both. Tested on 3.6.9 and 3.12.
 #
 # So: if you never install Codex MCP, you need no package at all. If you do,
 # install this. On 3.11+ it is only needed for the write side.

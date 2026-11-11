@@ -1,4 +1,4 @@
-"""Shared helpers for kit.py. Cross-platform; stdlib only (Python 3.11+ target).
+"""Shared helpers for kit.py. Cross-platform; stdlib only (Python 3.6+; Codex MCP also needs `toml`).
 
 Reads config/tools.tsv and config/mcp-targets.tsv, expands ~ per OS, parses kit
 frontmatter, substitutes ${KIT_SECRET:NAME}.
@@ -287,9 +287,20 @@ def merge_single_file(dest: Path, block: str):
 
 
 # ---- MCP merge --------------------------------------------------------------
-# TOML: read+write via the third-party `toml` package on this 3.6 host; on the
-# 3.11 target, read with stdlib tomllib and write with tomli_w/toml. Kept simple:
-# use `toml` if importable (covers both until the target is wired up).
+# TOML: stdlib tomllib reads (3.11+) but cannot write, so the third-party `toml`
+# package is needed to write on every version, and to read on Python < 3.11.
+
+class MissingToml(RuntimeError):
+    pass
+
+
+def _toml_pkg():
+    try:
+        import toml
+        return toml
+    except ImportError:
+        raise MissingToml("TOML MCP config (Codex) needs the 'toml' package: pip install toml")
+
 
 def _load_toml(path: Path) -> dict:
     if not path.exists() or path.stat().st_size == 0:
@@ -299,13 +310,12 @@ def _load_toml(path: Path) -> dict:
         with path.open("rb") as f:
             return tomllib.load(f)
     except ImportError:
-        import toml
-        return toml.loads(path.read_text(encoding="utf-8"))
+        return _toml_pkg().loads(path.read_text(encoding="utf-8"))
 
 
 def _dump_toml(path: Path, data: dict):
-    import toml  # tomllib has no writer; use the package (declared in requirements)
-    path.write_text(toml.dumps(data), encoding="utf-8")
+    # tomllib has no writer; use the package (declared in requirements)
+    path.write_text(_toml_pkg().dumps(data), encoding="utf-8")
 
 
 def merge_mcp_json(dest: Path, container: str, name: str, server: dict):

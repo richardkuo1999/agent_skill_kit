@@ -4,7 +4,15 @@
 
 上游同步是輔助：你的 repo 是主角，可以完全自己寫，也可以借用上游再改寫成自己的。
 
-需求：Python 3.11+ 和 git。
+需求：Python 3.6 以上（實測 3.6.9 與 3.12）和 git。只有安裝 Codex 的 MCP 設定時，才需要 `pip install toml`。
+
+## 第一步
+
+clone 這個 repo，用你的 AI 工具開啟這個資料夾，對它說：
+
+> 請讀 `skills/kitpilot/SKILL.md`，之後照它做。幫我引入 github.com/mattpocock/skills。
+
+AI 讀過 kitpilot 之後，這次對話裡直接說你要什麼就行，見下表。新對話要再說一次第一句。
 
 ## 怎麼用：對 AI 說話
 
@@ -195,7 +203,7 @@ repo 可公開，密鑰只放 gitignored 的 `config/secrets.env`，repo 內用 
 - `rules/` 目前是空的。這個 kit 只提供 rule 管理工具，實際要帶哪些 rule 由你之後決定。
 - Kiro 的 `fileMatchPattern`（glob rule）確切語法尚未確認，第一次裝 glob rule 時要驗證。
 - Antigravity 全域 always_on rule 共用 20,000 token 預算，超過會被降級為指標。rule 不要放太多常駐的。
-- `kit.py` 目標 Python 3.11+。尚未在實機 Windows 驗證（symlink 退回複製、各工具路徑），第一次在 Windows 用時要確認。
+- `kit.py` 只實測過 Python 3.6.9 與 3.12，其他版本未測。尚未在實機 Windows 驗證（symlink 退回複製、各工具路徑），第一次在 Windows 用時要確認。
 
 ## 授權
 

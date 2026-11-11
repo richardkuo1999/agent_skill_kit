@@ -237,6 +237,15 @@ def main():
         run(sb, home, "uninstall", "codex", "antigravity", "--workspace", str(pw), "--only", "skills")
         check(pw.is_dir() and not (pw / ".agents").exists(),
               "uninstall keeps workspace root, removes emptied .agents")
+        # missing 'toml' package: clear error, rc != 0, no traceback
+        env_nt = dict(os.environ, HOME=str(home))
+        r_nt = subprocess.run(
+            [PY, "-c", "import sys; sys.modules['toml']=None; sys.modules['tomllib']=None; "
+             "import kit; sys.exit(kit.main(['install','codex','--only','mcp','--profile','smoke']))"],
+            cwd=str(sb), env=env_nt, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        out_nt = r_nt.stdout.decode("utf-8", "ignore")
+        check(r_nt.returncode != 0 and "pip install toml" in out_nt and "Traceback" not in out_nt,
+              "missing toml package gives a clear error")
         # N6: a server with a missing secret is skipped; the others still install
         nosec = sb / "config/mcp/aaa-nosecret.json"
         nosec.write_text(json.dumps({"command": "x", "env": {"T": "${KIT_SECRET:NOPE_X}"}}))
