@@ -55,12 +55,16 @@ and a routing table filled from the profile's `[playbooks]`.
 
 ## uninstall — remove a project's environment
 
-Reverse of install. Use the SAME `--profile`, `--workspace` and `--only` the install
-used, so you remove the same set. It only removes what the kit owns (symlinks, rule
-files carrying the kit marker, the kit's own MCP server entries); hand-written content
-stays. Confirm which tool/project first, then:
+Reverse of install. Without `--profile` it removes every kit-installed skill it finds
+in that tool/project (symlinks into the kit, copies carrying `.kit-installed`); pass
+`--profile <name>` only to remove just that profile's skills. It never removes
+hand-written content. First run `list` and show the user what will go; confirm which
+tool/project, then:
 
-`python kit.py uninstall <tool> --profile <name> [--workspace <path>] [--only skills|rules|mcp]`
+`python kit.py uninstall <tool> [--profile <name>] [--workspace <path>] [--only skills|rules|mcp]`
+
+If it prints `skip ... shared with <tool>`, two tools use the same skills dir: ask the
+user, and add `--force` only after they confirm.
 
 ## inspect — what is installed / what the kit holds
 
@@ -106,6 +110,10 @@ Write or edit the file with the skills and playbooks the user wants. Mechanism s
 (kitpilot, curate, tools-sync) are never listed, so they never install. `pilot` need
 not be listed; install always adds it. Copy `default.txt` to a new name for a
 per-workspace set.
+
+After writing the profile, read each playbook it routes to. If a step names a skill
+that is not in the profile (or not in the kit), tell the user; kit.py only checks that
+the playbook files exist, not what their text mentions.
 
 ## MANIFEST — the human-readable map
 

@@ -63,7 +63,12 @@ def main():
     work = Path(tempfile.mkdtemp())
     try:
         sb = work / "kit"
-        shutil.copytree(KIT, sb, ignore=shutil.ignore_patterns(".git", "__pycache__"))
+        def _ignore(d, names):  # keep the user's own MCP defs/secrets out of the sandbox
+            skip = {".git", "__pycache__"}
+            if Path(d) == KIT / "config":
+                skip |= {"mcp", "secrets.env"}
+            return [n for n in names if n in skip]
+        shutil.copytree(KIT, sb, ignore=_ignore)
         # fake content
         (sb / "skills" / "smoke-skill").mkdir(parents=True)
         (sb / "skills" / "smoke-skill" / "SKILL.md").write_text("# smoke\n")
@@ -225,6 +230,48 @@ def main():
         check((proj / ".agents/skills/pilot").exists(), "uninstall skips dir shared with antigravity")
         run(sb, home, "uninstall", "codex", "--workspace", str(proj), "--profile", "smoke", "--only", "skills", "--force")
         check(not (proj / ".agents/skills/pilot").exists(), "--force removes shared dir")
+
+        # N2/U18: uninstall never removes the workspace root; cleans parents it emptied
+        pw = sb / "projN2"; pw.mkdir()
+        run(sb, home, "install", "codex", "--workspace", str(pw), "--profile", "smoke", "--only", "skills")
+        run(sb, home, "uninstall", "codex", "antigravity", "--workspace", str(pw), "--only", "skills")
+        check(pw.is_dir() and not (pw / ".agents").exists(),
+              "uninstall keeps workspace root, removes emptied .agents")
+        # N6: a server with a missing secret is skipped; the others still install
+        nosec = sb / "config/mcp/aaa-nosecret.json"
+        nosec.write_text(json.dumps({"command": "x", "env": {"T": "${KIT_SECRET:NOPE_X}"}}))
+        pm = sb / "projN6"; pm.mkdir()
+        rc6 = _rc(sb, home, "install", "kiro", "--workspace", str(pm), "--profile", "smoke", "--only", "mcp")
+        srv6 = json.loads((pm / ".kiro/settings/mcp.json").read_text()).get("mcpServers", {})
+        nosec.unlink()
+        check(rc6 != 0 and "smoke" in srv6 and "aaa-nosecret" not in srv6,
+              "missing secret skips only that server, rc!=0")
+        # N5: list marks an unmarked dir as unmanaged
+        pl = sb / "projN5"; (pl / ".cursor/skills/hand").mkdir(parents=True)
+        (pl / ".cursor/skills/hand/SKILL.md").write_text("x")
+        check("unmanaged" in _out(sb, home, "list", "cursor", "--workspace", str(pl)),
+              "list marks hand-written skill as unmanaged")
+        # N7: install warns about a playbook file that does not exist
+        (sb / "skills/profiles/n7.txt").write_text("[skills]\n\n[playbooks]\nx -> nope.md\n")
+        r7 = subprocess.run([PY, str(sb / "kit.py"), "install", "cursor", "--workspace", str(pl),
+                             "--profile", "n7", "--only", "skills"], cwd=str(sb),
+                            env=dict(os.environ, HOME=str(home)), stdout=subprocess.PIPE,
+                            stderr=subprocess.STDOUT)
+        check("nope.md" in r7.stdout.decode("utf-8", "ignore"),
+              "install warns on missing playbook file")
+
+        # U9: no --profile -> scan; removes every kit skill, keeps hand-written + foreign links
+        p9 = sb / "proj9"; sd = p9 / ".cursor/skills"; sd.mkdir(parents=True)
+        (sd / "mine").mkdir(); (sd / "mine/SKILL.md").write_text("hand")
+        outside = sb / "outside"; outside.mkdir()
+        (sd / "foreign").symlink_to(outside, target_is_directory=True)
+        run(sb, home, "install", "cursor", "--workspace", str(p9), "--profile", "smoke", "--only", "skills")
+        check((sd / "smoke-skill").is_symlink() and (sd / "pilot").is_symlink(), "U9 setup installed")
+        run(sb, home, "uninstall", "cursor", "--workspace", str(p9), "--only", "skills")
+        check(not (sd / "smoke-skill").is_symlink() and not (sd / "pilot").is_symlink(),
+              "uninstall without --profile removed all kit skills")
+        check((sd / "mine/SKILL.md").exists() and (sd / "foreign").is_symlink(),
+              "uninstall kept hand-written skill and foreign symlink")
 
         # uninstall B-class: strips kit block, keeps user text
         claude_p = home / ".claude/CLAUDE.md"

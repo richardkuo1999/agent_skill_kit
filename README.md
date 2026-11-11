@@ -91,7 +91,7 @@ python kit.py profiles                           # 列有哪些 profile
 python kit.py status                             # 本地 skill/rule/MCP、上游來源、profile 總覽
 ```
 
-`uninstall` 是 install 的反向：只移除 kit 裝的東西（符號連結、含 kit 標記的 rule 檔、kit 的 MCP server 條目），手寫的 skill 與 rule、你自己的其他 MCP server 都不碰。參數與 install 相同（`--workspace`、`--only`、`--profile`），用相同 profile 才能對準當初裝的那組。`--copy` 裝的 skill 目錄內有 `.kit-installed` 標記，沒有標記的目錄一律保留。uninstall 後只剩 kit 條目的 MCP 設定檔與已清空的資料夾會一併移除，非空的不動。若 antigravity 與 codex 共用 `.agents/skills`，只移除其中一個時會跳過並提示，加 `--force` 才移除。
+`uninstall` 是 install 的反向：只移除 kit 裝的東西（符號連結、含 kit 標記的 rule 檔、kit 的 MCP server 條目），手寫的 skill 與 rule、你自己的其他 MCP server 都不碰。不帶 `--profile` 時移除該處所有 kit 裝的 skill；帶 `--profile` 才只移除那一組。參數另有 `--workspace`、`--only`。`--copy` 裝的 skill 目錄內有 `.kit-installed` 標記，沒有標記的目錄一律保留。uninstall 後只剩 kit 條目的 MCP 設定檔與已清空的資料夾會一併移除，非空的不動。若 antigravity 與 codex 共用 `.agents/skills`，只移除其中一個時會跳過並提示，加 `--force` 才移除。
 
 裝哪些 skill 由 profile 決定（`skills/profiles/<name>.txt`，預設 `default`）。清單分兩段：`[skills]` 列要裝到工具的 skill，`[playbooks]` 列要填進 pilot 路由表的 playbook。沒列到的不裝，所以 kit 自己的機制 skill（kitpilot、curate、tools-sync）不會洩漏進工具。入口 `pilot` 一律裝。複製 `default.txt` 成 `web.txt` 之類即可為不同 workspace 準備不同組，用 `--profile web` 選用。
 

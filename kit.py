@@ -6,7 +6,7 @@ import-skill / import-rule / import-mcp / check-updates / diff / manifest /
 check-public / profiles / list / status / setup.
 
 Usage:
-  python kit.py install <tool>... [--workspace DIR] [--only skills|rules|mcp] [--copy]
+  python kit.py install <tool>... [--workspace DIR] [--only skills|rules|mcp] [--copy] [--profile NAME]
     tool: any name in config/tools.tsv, or 'all'
 """
 import argparse
@@ -152,7 +152,7 @@ def _install_mcp(targets, args, root):
                 print("ERROR {}: {} missing secret {} in config/secrets.env"
                       .format(t, name, e.args[0]), file=sys.stderr)
                 ok = False
-                break  # stop this tool; its later servers depend on nothing here
+                continue  # skip only this server; the others do not need this secret
             if fmt == "json":
                 kitlib.merge_mcp_json(dest, container, name, defn)
             else:
@@ -165,6 +165,25 @@ def _install_mcp(targets, args, root):
               "Do NOT commit them — add these paths to the project's .gitignore.",
               file=sys.stderr)
     return ok
+
+
+def _missing_playbooks(root, playbook_lines):
+    """Playbook files a profile routes to that do not exist under skills/pilot/."""
+    missing = []
+    for ln in playbook_lines:
+        sep = " -> " if " -> " in ln else ("→" if "→" in ln else None)
+        fname = (ln.split(sep, 1)[1] if sep else "").strip()
+        if fname and not fname.startswith("playbooks/"):
+            fname = "playbooks/" + fname
+        if fname and not (root / "skills" / "pilot" / fname).is_file():
+            missing.append(fname)
+    return missing
+
+
+def _warn_missing_playbooks(missing):
+    if missing:
+        print("WARN: profile routes to playbook file(s) that do not exist under "
+              "skills/pilot/: {}".format(", ".join(missing)), file=sys.stderr)
 
 
 def _fill_pilot(link, playbook_lines, copied):
@@ -210,6 +229,8 @@ def cmd_install(args: argparse.Namespace) -> int:
         print(e, file=sys.stderr)
         return 1
     install_skills = list(dict.fromkeys(prof_skills + ["pilot"]))
+    if want_skills:
+        _warn_missing_playbooks(_missing_playbooks(root, prof_playbooks))
 
     for t in dict.fromkeys(targets):  # de-dup, keep order
         row = tools[t]
@@ -262,10 +283,11 @@ def _skill_dir(row, args):
 
 
 def _uninstall_skills(t, row, args, root, install_skills, tools, targets):
-    """Remove the skills install would place for this tool/profile. Only touches
-    what the kit owns: a symlink, or a copied dir carrying COPY_MARK. Hand-made
-    skills (no marker) are never removed. If another tool outside this run
-    shares the same skills dir, skip unless --force."""
+    """Remove the skills the kit installed for this tool. Scans the skills dir;
+    kit-owned = a symlink resolving into the kit's skills/, or a copied dir
+    carrying COPY_MARK. Hand-made skills are never removed. install_skills, when
+    given (--profile), limits removal to those names. If another tool outside
+    this run shares the same skills dir, skip unless --force."""
     sg, sp = row[1], row[2]
     scope = sp if args.workspace else sg
     if scope == "-":
@@ -274,22 +296,32 @@ def _uninstall_skills(t, row, args, root, install_skills, tools, targets):
     sharers = [o for o, orow in tools.items()
                if o != t and o not in targets and _skill_dir(orow, args) == dest_dir]
     if sharers and not args.force:
-        print("skip {}: {} is shared with {}; use --force to remove anyway".format(
-            t, dest_dir, ", ".join(sharers)))
+        print("skip {}: {} is shared with {}. If {} does not use it, re-run with --force."
+              .format(t, dest_dir, ", ".join(sharers), ", ".join(sharers)))
         return
-    for name in install_skills:
-        link = dest_dir / name
+    if not dest_dir.is_dir():
+        print("skip {}: {} (not installed)".format(t, dest_dir)); return
+    kit_skills = (root / "skills").resolve()
+    removed = False
+    for link in sorted(dest_dir.iterdir()):
+        name = link.name
+        if install_skills is not None and name not in install_skills:
+            continue
         if link.is_symlink():
+            try:
+                link.resolve().relative_to(kit_skills)
+            except ValueError:
+                print("KEEP {}: {} (link points outside the kit)".format(t, name)); continue
             link.unlink()
-            print("DEL  {}: {} (link)".format(t, name))
+            print("DEL  {}: {} (link)".format(t, name)); removed = True
         elif link.is_dir() and (link / COPY_MARK).is_file():
             shutil.rmtree(link)
-            print("DEL  {}: {} (copy)".format(t, name))
-        elif link.is_dir():
+            print("DEL  {}: {} (copy)".format(t, name)); removed = True
+        elif link.is_dir() and install_skills is not None:
             print("KEEP {}: {} (no {} marker: hand-written or installed by an older kit)".format(
                 t, name, COPY_MARK))
-        else:
-            print("skip {}: {} (not installed)".format(t, name))
+    if not removed:
+        print("skip {}: no kit-installed skills in {}".format(t, dest_dir))
 
 
 def _uninstall_rules(t, row, args, root):
@@ -344,10 +376,13 @@ def _uninstall_mcp(targets, args, root):
 
 
 def _rmdir_empty(targets, tools, args):
-    """Remove skill/rule dirs that uninstall left empty. rmdir fails on a
-    non-empty dir, so user content is never touched. ponytail: cannot tell a
-    kit-created empty dir from a pre-existing empty one; both are removed."""
+    """Remove dirs that uninstall left empty, walking up the scope's own path
+    (.kiro/skills, then .kiro). Never removes the workspace root or HOME, and
+    rmdir fails on a non-empty dir, so user content is never touched.
+    ponytail: cannot tell a kit-created empty dir from a pre-existing empty
+    one; both are removed."""
     mcp = kitlib.mcp_table()
+    base = Path(args.workspace) if args.workspace else kitlib.expand("~")
     for t in dict.fromkeys(targets):
         row = tools[t]
         scopes = [row[2] if args.workspace else row[1],
@@ -358,13 +393,15 @@ def _rmdir_empty(targets, tools, args):
             if sc == "-":
                 continue
             d = (Path(args.workspace) / sc) if args.workspace else kitlib.expand(sc)
-            if d.suffix:  # a file path (e.g. CLAUDE.md, mcp.json): clean its parent
+            if d.suffix:  # a file path (e.g. CLAUDE.md, mcp.json): start at its parent
                 d = d.parent
-            try:
-                d.rmdir()
+            while d != base and base in d.parents:
+                try:
+                    d.rmdir()
+                except OSError:
+                    break
                 print("DEL  {}: empty dir {}".format(t, d))
-            except OSError:
-                pass
+                d = d.parent
 
 
 def cmd_uninstall(args) -> int:
@@ -385,12 +422,15 @@ def cmd_uninstall(args) -> int:
     want_mcp = (not only) or ("mcp" in only)
     root = kitlib.kit_root()
 
-    profile = getattr(args, "profile", None) or "default"
-    try:
-        prof_skills, _ = kitlib.load_profile(profile)
-    except ValueError as e:
-        print(e, file=sys.stderr); return 1
-    install_skills = list(dict.fromkeys(prof_skills + ["pilot"]))
+    # No --profile: remove every kit-installed skill. With --profile: only that
+    # profile's skills (plus pilot).
+    install_skills = None
+    if args.profile:
+        try:
+            prof_skills, _ = kitlib.load_profile(args.profile)
+        except ValueError as e:
+            print(e, file=sys.stderr); return 1
+        install_skills = list(dict.fromkeys(prof_skills + ["pilot"]))
 
     for t in dict.fromkeys(targets):
         row = tools[t]
@@ -509,8 +549,10 @@ def _list_one(t, row, mcp, args, root):
             for d in sorted(sdir.iterdir()):
                 if d.is_symlink():
                     print("  {:<24} link -> {}".format(d.name, os.readlink(str(d)))); found = True
-                elif d.is_dir() and (d / "SKILL.md").is_file():
+                elif d.is_dir() and (d / COPY_MARK).is_file():
                     print("  {:<24} copy".format(d.name)); found = True
+                elif d.is_dir() and (d / "SKILL.md").is_file():
+                    print("  {:<24} unmanaged (no kit marker)".format(d.name)); found = True
         if not found:
             print("  (none)")
 
@@ -644,7 +686,7 @@ def cmd_manifest(args) -> int:
     tool_sep = "---|" if with_tool else ""
 
     out.append("## Playbooks（多步工作流）")
-    missing_pb = []
+    missing_pb = _missing_playbooks(root, prof_playbooks)
     if prof_playbooks:
         for ln in prof_playbooks:
             sep = " -> " if " -> " in ln else ("→" if "→" in ln else None)
@@ -652,8 +694,6 @@ def cmd_manifest(args) -> int:
             fname = fname.strip()
             if fname and not fname.startswith("playbooks/"):
                 fname = "playbooks/" + fname
-            if fname and not (root / "skills" / "pilot" / fname).is_file():
-                missing_pb.append(fname)
             out.append("### {} — {}".format(fname.replace("playbooks/", "").replace(".md", ""),
                                              when.strip()))
             out.append("<!-- flow: 由 agent 補一個 Mermaid 流程圖，讀 skills/pilot/{} 的步驟 -->".format(fname))
@@ -681,9 +721,7 @@ def cmd_manifest(args) -> int:
     dest.write_text("\n".join(out) + "\n", encoding="utf-8")
     print("wrote {} (profile {}): {} playbooks, {} skills, {} rules"
           .format(dest, profile, len(prof_playbooks), len(prof_skills), len(rule_rows)))
-    if missing_pb:
-        print("WARN: profile routes to playbook file(s) that do not exist under "
-              "skills/pilot/: {}".format(", ".join(missing_pb)), file=sys.stderr)
+    _warn_missing_playbooks(missing_pb)
     print("next: have the agent fill each <!-- flow --> with a Mermaid diagram.")
     return 0
 
@@ -1206,8 +1244,8 @@ def main(argv=None) -> int:
     pu.add_argument("--workspace", help="remove from DIR's project-level folders")
     pu.add_argument("--only", action="append", choices=["skills", "rules", "mcp"],
                     help="uninstall just one kind (repeatable)")
-    pu.add_argument("--profile", default="default",
-                    help="which profile's skills to remove (matches the install profile)")
+    pu.add_argument("--profile", default=None,
+                    help="remove only this profile's skills (default: every kit-installed skill)")
     pu.add_argument("--force", action="store_true",
                     help="remove skills even if another tool shares the same skills dir")
     pu.set_defaults(func=cmd_uninstall)
